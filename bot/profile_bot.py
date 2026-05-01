@@ -43,7 +43,7 @@ from typing import Any
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 from loguru import logger
-
+from keep_alive import keep_alive
 from kyodo import ChatMessage, Client, EventType
 from kyodo.objects.args import ChatMessageTypes, MediaTarget
 
@@ -926,6 +926,7 @@ async def main():
 
 if __name__=="__main__":
     while True:
+        keep_alive()
         try: asyncio.run(main())
         except (KeyboardInterrupt,SystemExit): break
         except Exception as e: logger.error(f"[top] {e}"); time.sleep(5)
