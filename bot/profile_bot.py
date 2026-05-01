@@ -49,7 +49,7 @@ from kyodo.objects.args import ChatMessageTypes, MediaTarget
 
 import json as _json
 
-from assets import (
+from .assets import (
     ASSETS, COLOR_MAP,
     get_price, get_reward,
 )
