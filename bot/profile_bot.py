@@ -416,6 +416,7 @@ def _circular(img, size):
 
 def _paste(base, key, x, y, size, circ=False):
     fn=ASSETS.get(key)
+    fn = os.path.join(BASE_DIR, fn)
     if not fn or not os.path.exists(fn): return base
     img=Image.open(fn).convert("RGBA")
     if circ:
