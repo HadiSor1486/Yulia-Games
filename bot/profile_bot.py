@@ -59,7 +59,11 @@ with suppress(ImportError):
     import uvloop
     uvloop.install()
 
+BASE_DIR = os.path.dirname(os.path.abspath(file))
 
+def _p(*parts):
+    """Resolve a path relative to this script's folder."""
+    return os.path.join(BASE_DIR, *parts)
 # ══════════════════════════════════════════════════════════════════════════════
 # 1.  CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
@@ -73,22 +77,22 @@ class Config:
     SOR_ID    = os.getenv("BOT_SOR_ID",    "cmgxsk2b30nalpx3ffm07h9i9")
 
     # Profile card
-    TEMPLATE_PATH    = "template.png"
-    FONT_LATIN       = "font1.ttf"
-    FONT_ARABIC      = "fontar.ttf"
+    TEMPLATE_PATH    = _p("template.png")
+    FONT_LATIN       = _p("font1.ttf")
+    FONT_ARABIC      = _p("fontar.ttf")
     OUTPUT_QUALITY   = 95
     MAX_OUTPUT_WIDTH = 1100
 
     # Welcome card
-    WELCOME_BG               = "shbg.jpg"
+    WELCOME_BG               = _p("shbg.jpg")
     WELCOME_PROFILE_SIZE     = (303, 303)
     WELCOME_PROFILE_POSITION = (389, 291)
 
     # Storage
-    ACCOUNTS_FILE = "accounts.json"
-    BANNED_FILE   = "banned.json"
-    MEMBERS_FILE  = "members.json"
-    LOG_FILE      = "profile_bot.log"
+    ACCOUNTS_FILE = _p("accounts.json")
+    BANNED_FILE   = _p("banned.json")
+    MEMBERS_FILE  = _p("members.json")
+    LOG_FILE      = _p("profile_bot.log")
 
     # Connect Four timeouts (read by the FourInARow plugin)
     C4_EMOJI_TIMEOUT_S = 180
