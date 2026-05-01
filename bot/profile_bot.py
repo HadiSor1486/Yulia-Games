@@ -53,7 +53,7 @@ from .assets import (
     ASSETS, COLOR_MAP,
     get_price, get_reward,
 )
-from games import GAME_CLASSES   # all registered game plugins
+from .games import GAME_CLASSES   # all registered game plugins
 
 with suppress(ImportError):
     import uvloop
