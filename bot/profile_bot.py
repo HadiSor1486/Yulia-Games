@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(file)))
 import signal
 import tempfile
 import time
