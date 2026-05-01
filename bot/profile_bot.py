@@ -231,7 +231,7 @@ def json_write(path: str, data: Any):
         with suppress(FileNotFoundError): os.remove(tmp)
         raise
 
-
+_seen_msg_ids: set[str] = set()
 # ══════════════════════════════════════════════════════════════════════════════
 # 6.  DATA STORES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -803,7 +803,15 @@ async def on_join(message: ChatMessage):
 @client.event(EventType.ChatMessage)
 async def on_message(message: ChatMessage):
     try:
-        content=( message.content or "").strip()
+        # Deduplicate
+        mid = message.messageId
+        if mid in _seen_msg_ids:
+            return
+        _seen_msg_ids.add(mid)
+        if len(_seen_msg_ids) > 500:
+            _seen_msg_ids.clear()
+
+        content = (message.content or "").strip()
         uid=message.author.userId; nickname=message.author.nickname
         av=message.author.avatar_url or ""
         chat_id=message.chatId; circle_id=message.circleId; msg_id=message.messageId
