@@ -59,7 +59,7 @@ with suppress(ImportError):
     import uvloop
     uvloop.install()
 
-BASE_DIR = os.path.dirname(os.path.abspath(file))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _p(*parts):
     """Resolve a path relative to this script's folder."""
