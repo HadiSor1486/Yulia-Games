@@ -46,7 +46,8 @@ from loguru import logger
 from keep_alive import keep_alive
 from kyodo import ChatMessage, Client, EventType
 from kyodo.objects.args import ChatMessageTypes, MediaTarget
-
+import kyodo
+print("KYODO VERSION:", kyodo.__version__)
 import json as _json
 
 from .assets import (
