@@ -1,0 +1,180 @@
+2026-05-01 16:50:19.183 | INFO     | __main__:_run_session:887 - Logging in…
+2026-05-01 16:50:20.793 | SUCCESS  | __main__:_run_session:889 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 16:50:21.885 | INFO     | __main__:scan_members:285 - [members] 38 members
+2026-05-01 17:02:22.938 | INFO     | __main__:_run_session:887 - Logging in…
+2026-05-01 17:02:24.095 | SUCCESS  | __main__:_run_session:889 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 17:02:25.372 | INFO     | __main__:scan_members:285 - [members] 38 members
+2026-05-01 18:37:56.413 | INFO     | __main__:_run_session:887 - Logging in…
+2026-05-01 18:37:58.062 | SUCCESS  | __main__:_run_session:889 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 18:38:00.022 | INFO     | __main__:scan_members:285 - [members] 38 members
+2026-05-01 19:11:49.822 | INFO     | __main__:_run_session:887 - Logging in…
+2026-05-01 19:11:51.795 | SUCCESS  | __main__:_run_session:889 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 19:11:53.549 | INFO     | __main__:scan_members:285 - [members] 38 members
+2026-05-01 21:44:34.549 | INFO     | __main__:_run_session:856 - Logging in…
+2026-05-01 21:44:39.351 | SUCCESS  | __main__:_run_session:858 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 21:44:42.242 | INFO     | __main__:scan_members:283 - [members] 38 members
+2026-05-01 21:51:44.293 | INFO     | __main__:_run_session:887 - Logging in…
+2026-05-01 21:51:47.856 | SUCCESS  | __main__:_run_session:889 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 21:51:48.961 | INFO     | __main__:scan_members:285 - [members] 38 members
+2026-05-01 21:52:12.139 | ERROR    | __main__:on_message:876 - [on_message] type object 'Config' has no attribute 'BARRA_MIN_PLAYERS'
+Traceback (most recent call last):
+
+  File "/data/user/0/ru.iiec.pydroid3/files/accomp_files/iiec_run/iiec_run.py", line 31, in <module>
+    start(fakepyfile,mainpyfile)
+
+  File "/data/user/0/ru.iiec.pydroid3/files/accomp_files/iiec_run/iiec_run.py", line 30, in start
+    exec(open(mainpyfile).read(),  __main__.__dict__)
+              │                    │        └ <member '__dict__' of 'module' objects>
+              │                    └ <module '__main__' from '/storage/emulated/0/a sor (1)/profile_bot.py'>
+              └ '/data/user/0/ru.iiec.pydroid3/files/temp_iiec_codefile.py'
+
+  File "<string>", line 910, in <module>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           │      │   └ <coroutine object main at 0x6f3d64cf40>
+           │      └ <function Runner.run at 0x6f47d1f420>
+           └ <asyncio.runners.Runner object at 0x6f3d680440>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           │    │     │                  └ <Task pending name='Task-1' coro=<main() running at <string>:898> wait_for=<Future pending cb=[Task.task_wakeup()]> cb=[_run_...
+           │    │     └ <function BaseEventLoop.run_until_complete at 0x6f47d1cf40>
+           │    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+           └ <asyncio.runners.Runner object at 0x6f3d680440>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/base_events.py", line 712, in run_until_complete
+    self.run_forever()
+    │    └ <function BaseEventLoop.run_forever at 0x6f47d1cea0>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/base_events.py", line 683, in run_forever
+    self._run_once()
+    │    └ <function BaseEventLoop._run_once at 0x6f47d1eca0>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/base_events.py", line 2040, in _run_once
+    handle._run()
+    │      └ <function Handle._run at 0x6f47ea9260>
+    └ <Handle Task.task_wakeup()>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/events.py", line 89, in _run
+    self._context.run(self._callback, *self._args)
+    │    │            │    │           │    └ <member '_args' of 'Handle' objects>
+    │    │            │    │           └ <Handle Task.task_wakeup()>
+    │    │            │    └ <member '_callback' of 'Handle' objects>
+    │    │            └ <Handle Task.task_wakeup()>
+    │    └ <member '_context' of 'Handle' objects>
+    └ <Handle Task.task_wakeup()>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/ws/socket.py", line 72, in ws_resolve
+    await self.handle_data(data)
+          │    │           └ {'o': 1, 'd': {'chatId': 'cmh2gy89r01pvt33exijh1wr3', 'circleId': 'cm9bylrbn00hmux6t43mczt2o', 'chatMessage': {'id': 'cmgxsk2...
+          │    └ <function Handler.handle_data at 0x6f3d84c180>
+          └ kyodo.Client(deviceId='870d649515ce700797d6a56965689f3aaa7d5e82dfdce994b239e00e37238184', user_agent'okhttp/4.12.0', language...
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/ws/socket_handler.py", line 16, in handle_data
+    await self.call(data, _o)
+          │    │    │     └ 1
+          │    │    └ {'chatId': 'cmh2gy89r01pvt33exijh1wr3', 'circleId': 'cm9bylrbn00hmux6t43mczt2o', 'chatMessage': {'id': 'cmgxsk2b30nalpx3ffm07...
+          │    └ <function Handler.call at 0x6f3d84c220>
+          └ kyodo.Client(deviceId='870d649515ce700797d6a56965689f3aaa7d5e82dfdce994b239e00e37238184', user_agent'okhttp/4.12.0', language...
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/ws/socket_handler.py", line 42, in call
+    await func(data)
+          │    └ <kyodo.objects.chats.ChatMessage object at 0x6f3d60f360>
+          └ <function on_message at 0x6f3d693e20>
+> File "<string>", line 874, in on_message
+
+  File "/storage/emulated/0/a sor (1)/games/bara_alsalfa.py", line 119, in start_challenge
+    f"(نحتاج {self.config.BARRA_MIN_PLAYERS} لاعبين على الأقل)\n\n"
+              │    └ <class '__main__.Config'>
+              └ <games.bara_alsalfa.BaraAlsalfeh object at 0x6f3d5baf90>
+
+AttributeError: type object 'Config' has no attribute 'BARRA_MIN_PLAYERS'
+2026-05-01 22:07:20.127 | INFO     | __main__:_run_session:887 - Logging in…
+2026-05-01 22:07:22.280 | SUCCESS  | __main__:_run_session:889 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 22:07:23.484 | INFO     | __main__:scan_members:285 - [members] 38 members
+2026-05-01 22:17:24.149 | INFO     | __main__:_run_session:895 - Logging in…
+2026-05-01 22:17:26.191 | SUCCESS  | __main__:_run_session:897 - ✅ Logged in — Profile Bot is alive!
+2026-05-01 22:17:27.749 | INFO     | __main__:scan_members:285 - [members] 39 members
+2026-05-01 22:20:57.779 | ERROR    | __main__:on_join:783 - [on_join] [10001:406]: You can't access this content.
+Traceback (most recent call last):
+
+  File "/data/user/0/ru.iiec.pydroid3/files/accomp_files/iiec_run/iiec_run.py", line 31, in <module>
+    start(fakepyfile,mainpyfile)
+
+  File "/data/user/0/ru.iiec.pydroid3/files/accomp_files/iiec_run/iiec_run.py", line 30, in start
+    exec(open(mainpyfile).read(),  __main__.__dict__)
+              │                    │        └ <member '__dict__' of 'module' objects>
+              │                    └ <module '__main__' from '/storage/emulated/0/a sor (1)/profile_bot.py'>
+              └ '/data/user/0/ru.iiec.pydroid3/files/temp_iiec_codefile.py'
+
+  File "<string>", line 918, in <module>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           │      │   └ <coroutine object main at 0x6dd9ec8f40>
+           │      └ <function Runner.run at 0x6de7eaf420>
+           └ <asyncio.runners.Runner object at 0x6dd9efc440>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           │    │     │                  └ <Task pending name='Task-1' coro=<main() running at <string>:906> wait_for=<Future pending cb=[Task.task_wakeup()]> cb=[_run_...
+           │    │     └ <function BaseEventLoop.run_until_complete at 0x6de7eacf40>
+           │    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+           └ <asyncio.runners.Runner object at 0x6dd9efc440>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/base_events.py", line 712, in run_until_complete
+    self.run_forever()
+    │    └ <function BaseEventLoop.run_forever at 0x6de7eacea0>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/base_events.py", line 683, in run_forever
+    self._run_once()
+    │    └ <function BaseEventLoop._run_once at 0x6de7eaeca0>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/base_events.py", line 2040, in _run_once
+    handle._run()
+    │      └ <function Handle._run at 0x6de802d260>
+    └ <Handle Task.task_wakeup()>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/asyncio/events.py", line 89, in _run
+    self._context.run(self._callback, *self._args)
+    │    │            │    │           │    └ <member '_args' of 'Handle' objects>
+    │    │            │    │           └ <Handle Task.task_wakeup()>
+    │    │            │    └ <member '_callback' of 'Handle' objects>
+    │    │            └ <Handle Task.task_wakeup()>
+    │    └ <member '_context' of 'Handle' objects>
+    └ <Handle Task.task_wakeup()>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/ws/socket.py", line 72, in ws_resolve
+    await self.handle_data(data)
+          │    │           └ {'o': 1, 'd': {'chatId': 'Uyw3-Bsi54FoblhyfEdt1OACYGG-hPuHWbYeMok41UU', 'circleId': 'cm9bylrbn00hmux6t43mczt2o', 'chatMessage...
+          │    └ <function Handler.handle_data at 0x6dda07c220>
+          └ kyodo.Client(deviceId='870d649515ce700797d6a56965689f3aaa7d5e82dfdce994b239e00e37238184', user_agent'okhttp/4.12.0', language...
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/ws/socket_handler.py", line 16, in handle_data
+    await self.call(data, _o)
+          │    │    │     └ 1
+          │    │    └ {'chatId': 'Uyw3-Bsi54FoblhyfEdt1OACYGG-hPuHWbYeMok41UU', 'circleId': 'cm9bylrbn00hmux6t43mczt2o', 'chatMessage': {'id': 'cmo...
+          │    └ <function Handler.call at 0x6dda07c2c0>
+          └ kyodo.Client(deviceId='870d649515ce700797d6a56965689f3aaa7d5e82dfdce994b239e00e37238184', user_agent'okhttp/4.12.0', language...
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/ws/socket_handler.py", line 42, in call
+    await func(data)
+          │    └ <kyodo.objects.chats.ChatMessage object at 0x6dd9d650f0>
+          └ <function on_join at 0x6dd9d1be20>
+> File "<string>", line 782, in on_join
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/api/chats.py", line 139, in send_message
+    return await self.send_chat_entity(chatId, entity, ChatMessageTypes.Text, circleId)
+                 │    │                │       │       │                │     └ 'cm9bylrbn00hmux6t43mczt2o'
+                 │    │                │       │       │                └ 0
+                 │    │                │       │       └ <class 'kyodo.objects.args.chat.ChatMessageTypes'>
+                 │    │                │       └ {'content': '🌫️ أهلاً بك في المملكة, solid', 'type': 0, 'refId': 'cmo5spkl63lbd0ibvh62n3n2c.a0f8d87b-85ce-43b3-b3ed-c9f57d21e...
+                 │    │                └ 'Uyw3-Bsi54FoblhyfEdt1OACYGG-hPuHWbYeMok41UU'
+                 │    └ <function require_auth.<locals>.wrapper at 0x6dda0a74c0>
+                 └ kyodo.Client(deviceId='870d649515ce700797d6a56965689f3aaa7d5e82dfdce994b239e00e37238184', user_agent'okhttp/4.12.0', language...
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/api/chats.py", line 131, in send_chat_entity
+    response = await self.req.make_async_request("POST", f"/{circleId or 'g'}/s/chats/{chatId}/messages", entity)
+                     │    │   │                              │                         │                  └ {'content': '🌫️ أهلاً بك في المملكة, solid', 'type': 0, 'refId': 'cmo5spkl63lbd0ibvh62n3n2c.a0f8d87b-85ce-43b3-b3ed-c9f57d21e...
+                     │    │   │                              │                         └ 'Uyw3-Bsi54FoblhyfEdt1OACYGG-hPuHWbYeMok41UU'
+                     │    │   │                              └ 'cm9bylrbn00hmux6t43mczt2o'
+                     │    │   └ <function Requester.make_async_request at 0x6dda07d080>
+                     │    └ <kyodo.utils.requester.Requester object at 0x6ddf96a7b0>
+                     └ kyodo.Client(deviceId='870d649515ce700797d6a56965689f3aaa7d5e82dfdce994b239e00e37238184', user_agent'okhttp/4.12.0', language...
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/utils/requester.py", line 88, in make_async_request
+    await checkException(response)
+          │              └ <kyodo.utils.request_helper.AsyncHTTPResponse object at 0x6dd9fef4d0>
+          └ <function checkException at 0x6ddf754720>
+  File "/data/user/0/ru.iiec.pydroid3/files/aarch64-linux-android/lib/python3.13/site-packages/kyodo/utils/exceptions.py", line 173, in checkException
+    else:raise UnknownError(f"[{_}]: {message}", response)
+               │                │     │          └ <kyodo.utils.request_helper.AsyncHTTPResponse object at 0x6dd9fef4d0>
+               │                │     └ "You can't access this content."
+               │                └ '10001:406'
+               └ <class 'kyodo.utils.exceptions.UnknownError'>
+
+kyodo.utils.exceptions.UnknownError: [10001:406]: You can't access this content.
