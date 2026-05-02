@@ -1138,23 +1138,7 @@ async def cmd_shop(msg):
     try:
         cid = msg.chatId
         circ = msg.circleId
-        uid = msg.author.userId
-        lines = ["🛒 *Asset Shop*", "━━━━━━━━━━━━━━━━━━"]
-        cats = {
-            "Backgrounds": [k for k in ASSETS if k.startswith("bg") and "default" not in k],
-            "Frames":      [k for k in ASSETS if k.startswith("frame") and "default" not in k],
-            "Bubbles":     [k for k in ASSETS if k.startswith("bubble") and "default" not in k],
-            "Colours":     [k for k in ASSETS if ASSETS[k] is None],
-        }
-        for cat, keys in cats.items():
-            if not keys:
-                continue
-            lines.append(f"\n{cat}:")
-            for k in sorted(keys):
-                owned = "✅" if (has_account(uid) and owns_asset(uid, k)) else "  "
-                lines.append(f"  {owned} {k:<14} {get_price(k)} sorex")
-        lines += ["", "━━━━━━━━━━━━━━━━━━", "/buy <type> <n>  — purchase", "/use <type> <n>  — equip (shows card auto)"]
-        await client.send_message(cid, "\n".join(lines), circ)
+        await client.send_message(cid, "https://silent-hill-shop.netlify.app", circ)
     except Exception:
         logger.exception("[cmd_shop]")
 
