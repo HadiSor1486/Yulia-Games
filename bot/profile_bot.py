@@ -1057,60 +1057,83 @@ async def on_message(message: ChatMessage):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 17.  STARTUP / SHUTDOWN / RESTART LOOP
+# 17.  MAIN
 # ══════════════════════════════════════════════════════════════════════════════
-_restart_event = asyncio.Event()
+_stop = False
 
-async def _graceful_shutdown(sig=None):
-    logger.info("Shutting down…")
-    await close_http()
-    await close_github()   # flush any pending pushes
-    _restart_event.set()
+def _shutdown(sig, frame):
+    global _stop
+    logger.info(f"Signal {sig}")
+    _stop = True
+
+signal.signal(signal.SIGTERM, _shutdown)
+signal.signal(signal.SIGINT, _shutdown)
 
 
-async def main_loop():
-    """Login, load data, start client, then block until a restart is requested."""
+async def _cleanup_client():
+    """Clean up client state before reconnecting."""
+    try:
+        if hasattr(client, 'disconnect') and callable(client.disconnect):
+            await client.disconnect()
+    except Exception:
+        pass
+    try:
+        if hasattr(client, 'close') and callable(client.close):
+            await client.close()
+    except Exception:
+        pass
+    await asyncio.sleep(1)
+
+
+async def _run_session():
+    logger.info("Logging in…")
+    await client.login(Config.EMAIL, Config.PASSWORD)
+    logger.success("✅ Logged in — Profile Bot is alive!")
+    asyncio.create_task(scan_members())
+    await client.socket_wait()
+
+
+async def main():
+    global _stop
+    # Pull latest data from GitHub first, fall back to local files
+    await load_all()
+    logger.info(f"Data loaded — accounts:{len(accounts)} banned:{len(banned)} members:{len(members)}")
+
     backoff = Config.RESTART_BACKOFF_MIN
-
-    while True:
-        try:
-            # Pull latest data from GitHub first, fall back to local files
-            await load_all()
-            logger.info(f"Data loaded — accounts:{len(accounts)} banned:{len(banned)} members:{len(members)}")
-
-            await client.login(Config.EMAIL, Config.PASSWORD)
-            logger.info(f"Logged in as {client.userId}")
-
-            await client.reconnect()
-            logger.info("Connected to Kyodo ✓")
-
-            _restart_event.clear()
-            await _restart_event.wait()  # block here until shutdown signal
-
-        except Exception as e:
-            logger.exception(f"[main_loop] {e}")
-
-        logger.info(f"Restarting in {backoff}s …")
-        await asyncio.sleep(backoff)
-        backoff = min(backoff * 2, Config.RESTART_BACKOFF_MAX)
+    try:
+        while not _stop:
+            start = time.time()
+            try:
+                await _run_session()
+                logger.warning("[main] session ended")
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                logger.exception(f"[main] {e}")
+            if _stop:
+                break
+            await _cleanup_client()
+            if time.time() - start > 300:
+                backoff = Config.RESTART_BACKOFF_MIN
+            else:
+                backoff = min(backoff * 2, Config.RESTART_BACKOFF_MAX)
+            logger.info(f"[main] restart in {backoff}s…")
+            slept = 0.0
+            while slept < backoff and not _stop:
+                await asyncio.sleep(1.0)
+                slept += 1.0
+    finally:
+        await close_http()
+        await close_github()
 
 
 if __name__ == "__main__":
-    keep_alive()
-
-    # Handle SIGTERM (sent by Render on shutdown / redeploy)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    for s in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(s, lambda: asyncio.create_task(_graceful_shutdown()))
-
-    try:
-        loop.run_until_complete(main_loop())
-    except KeyboardInterrupt:
-        loop.run_until_complete(_graceful_shutdown())
-    finally:
-        with suppress(Exception):
-            loop.run_until_complete(close_github())
-        with suppress(Exception):
-            loop.run_until_complete(close_http())
-        loop.close()
+    while True:
+        keep_alive()
+        try:
+            asyncio.run(main())
+        except (KeyboardInterrupt, SystemExit):
+            break
+        except Exception as e:
+            logger.error(f"[top] {e}")
+            time.sleep(5)
