@@ -1,16 +1,17 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════╗
-║                     SOREX PROFILE BOT  —  Kyodo                         ║
+║                  SOREX PROFILE BOT  —  Kyodo (BULLETPROOF)              ║
 ║                                                                          ║
 ║  USER COMMANDS                                                           ║
 ║   /signup          — create your profile (step-by-step)                 ║
 ║   /profile         — view your own profile card                         ║
-║   /view <name>     — view another player's profile card                 ║
-║   /buy <type> <n>  — buy an asset  (frame 1 / bubble 2 / bg 3 /         ║
-║                                     colour white)                       ║
+║   /view <name>     — view by profile name OR Kyodo nickname             ║
+║   /buy <type> <n>  — buy an asset (frame 1 / bubble 2 / bg 3 /          ║
+║                                    colour white)                        ║
 ║   /use <type> <n>  — equip a purchased asset (card shown automatically) ║
 ║   /remove bio      — clear your bio (shows "Empty")                     ║
 ║   /set bio <text>  — set or update your bio                             ║
+║   /set name <name> — change your profile name                           ║
 ║   /balance         — check your sorex balance                           ║
 ║   /shop            — list all purchasable assets & prices               ║
 ║                                                                          ║
@@ -23,8 +24,6 @@
 ║   /give <n> sorex  — reply to transfer sorex to someone                 ║
 ║   /ban             — reply to ban a user from the bot                   ║
 ║   /unban           — reply to unban a user                              ║
-║   yulia scan       — refresh member list                                ║
-║   yulia welcome <name> — manual welcome card                            ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -37,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import signal
 import tempfile
 import time
+import unicodedata
 from contextlib import suppress
 from io import BytesIO
 from typing import Any
@@ -54,8 +54,8 @@ from .assets import (
     ASSETS, COLOR_MAP, GAME_MAP,
     get_price, get_reward,
 )
-from .games import GAME_CLASSES   # all registered game plugins
-from .github_storage import pull_all, schedule_push, close as close_github  # persistent storage
+from .games import GAME_CLASSES
+from .github_storage import pull_all, schedule_push, close as close_github
 
 with suppress(ImportError):
     import uvloop
@@ -63,9 +63,11 @@ with suppress(ImportError):
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 def _p(*parts):
-    """Resolve a path relative to this script's folder."""
     return os.path.join(BASE_DIR, *parts)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 1.  CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
@@ -78,25 +80,20 @@ class Config:
     CIRCLE_ID = os.getenv("BOT_CIRCLE_ID", "cm9bylrbn00hmux6t43mczt2o")
     SOR_ID    = os.getenv("BOT_SOR_ID",    "cmgxsk2b30nalpx3ffm07h9i9")
 
-    # Profile card
     TEMPLATE_PATH    = _p("template.png")
     FONT_LATIN       = _p("font1.ttf")
     FONT_ARABIC      = _p("fontar.ttf")
     OUTPUT_QUALITY   = 95
     MAX_OUTPUT_WIDTH = 1100
 
-    # Welcome card
-    WELCOME_BG               = _p("shbg.jpg")
-    WELCOME_PROFILE_SIZE     = (303, 303)
-    WELCOME_PROFILE_POSITION = (389, 291)
-
-    # Storage
     ACCOUNTS_FILE = _p("accounts.json")
     BANNED_FILE   = _p("banned.json")
-    MEMBERS_FILE  = _p("members.json")
     LOG_FILE      = _p("profile_bot.log")
+    DEDUP_FILE    = _p("dedup.json")
 
-    # Connect Four timeouts (read by the FourInARow plugin)
+    DEDUP_MAX_AGE = 300
+    DEDUP_MAX_ENTRIES = 5000
+
     C4_EMOJI_TIMEOUT_S = 180
     C4_GAME_TIMEOUT_S  = 1800
 
@@ -125,7 +122,30 @@ logger.add(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 3.  ARABIC TEXT RESHAPING  (no external deps)
+# 3.  TEXT NORMALIZATION  (fancy fonts, Arabic, Unicode variations)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize text for matching.
+    - NFKD decomposes fancy font characters to base + modifier
+    - Strips combining characters (font stylers)
+    - Lowercases
+    """
+    if not text:
+        return ""
+    decomposed = unicodedata.normalize('NFKD', text)
+    stripped = ''.join(c for c in decomposed if not unicodedata.combining(c))
+    return stripped.lower().strip()
+
+
+def names_match(a: str, b: str) -> bool:
+    """Check if two names match (handles fancy fonts, case, whitespace)."""
+    return normalize_text(a) == normalize_text(b)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4.  ARABIC TEXT RESHAPING
 # ══════════════════════════════════════════════════════════════════════════════
 try:
     from PIL import features as _pil_features
@@ -197,12 +217,12 @@ def prepare_text(t):
     if not is_arabic(t):
         return t
     if _RAQM:
-        return t  # libraqm handles Arabic shaping & RTL automatically
+        return t
     return reshape_arabic(t)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 4.  NETWORK
+# 5.  NETWORK
 # ══════════════════════════════════════════════════════════════════════════════
 _http: httpx.AsyncClient | None = None
 
@@ -211,7 +231,7 @@ async def http() -> httpx.AsyncClient:
     if _http is None or _http.is_closed:
         _http = httpx.AsyncClient(
             timeout=httpx.Timeout(Config.HTTP_TIMEOUT),
-            headers={"User-Agent": "SorexBot/2.0"},
+            headers={"User-Agent": "SorexBot/2.1"},
             follow_redirects=True,
             limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
         )
@@ -219,59 +239,106 @@ async def http() -> httpx.AsyncClient:
 
 async def close_http():
     global _http
-    if _http and not _http.is_closed: await _http.aclose()
+    if _http and not _http.is_closed:
+        await _http.aclose()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 5.  JSON HELPERS
+# 6.  JSON HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 def json_read(path: str, default: Any = None) -> Any:
-    if default is None: default = {}
+    if default is None:
+        default = {}
     try:
-        if not os.path.exists(path): json_write(path, default); return default
-        with open(path,"r",encoding="utf-8") as f: return _json.load(f)
-    except Exception as e: logger.error(f"[json] read {path}: {e}"); return default
+        if not os.path.exists(path):
+            json_write(path, default)
+            return default
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception as e:
+        logger.error(f"[json] read {path}: {e}")
+        return default
+
 
 def json_write(path: str, data: Any):
-    d=os.path.dirname(os.path.abspath(path)) or "."; os.makedirs(d, exist_ok=True)
-    fd,tmp=tempfile.mkstemp(prefix=".tmp_",dir=d)
+    d = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d)
     try:
-        with os.fdopen(fd,"w",encoding="utf-8") as f: _json.dump(data,f,indent=2,ensure_ascii=False)
-        os.replace(tmp,path)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            _json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
     except Exception:
-        with suppress(FileNotFoundError): os.remove(tmp)
+        with suppress(FileNotFoundError):
+            os.remove(tmp)
         raise
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 6.  DEDUPLICATION & COOLDOWN  (prevents duplicate messages/commands)
+# 7.  BULLETPROOF DEDUPLICATION
 # ══════════════════════════════════════════════════════════════════════════════
 _seen_msg_ids: set[str] = set()
-_command_cooldown: dict[str, float] = {}   # "uid|command" → timestamp
-COMMAND_COOLDOWN_S = 3.0
+_command_cooldown: dict[str, float] = {}
+COMMAND_COOLDOWN_S = 5.0
+
+_dedup_persistent: dict[str, float] = {}
+
+
+def _load_dedup():
+    global _dedup_persistent
+    data = json_read(Config.DEDUP_FILE, {})
+    if not isinstance(data, dict):
+        data = {}
+    now = time.time()
+    _dedup_persistent = {
+        k: v for k, v in data.items()
+        if isinstance(v, (int, float)) and now - v < Config.DEDUP_MAX_AGE
+    }
+
+
+def _save_dedup():
+    try:
+        json_write(Config.DEDUP_FILE, _dedup_persistent)
+    except Exception as e:
+        logger.warning(f"[dedup] failed to save: {e}")
+
+
+def _prune_dedup():
+    global _dedup_persistent
+    now = time.time()
+    cutoff = now - Config.DEDUP_MAX_AGE
+    if len(_dedup_persistent) > Config.DEDUP_MAX_ENTRIES:
+        sorted_items = sorted(_dedup_persistent.items(), key=lambda x: x[1], reverse=True)
+        _dedup_persistent = dict(sorted_items[:Config.DEDUP_MAX_ENTRIES])
+    else:
+        _dedup_persistent = {k: v for k, v in _dedup_persistent.items() if v > cutoff}
+
 
 async def _dedup_message(message: ChatMessage) -> bool:
-    """Return True if message is a duplicate and should be dropped."""
     mid = message.messageId
+    now = time.time()
     if mid in _seen_msg_ids:
         return True
+    if mid in _dedup_persistent:
+        return True
     _seen_msg_ids.add(mid)
-    # Prevent unbounded growth — reset when too large
-    if len(_seen_msg_ids) > 5000:
+    _dedup_persistent[mid] = now
+    if len(_seen_msg_ids) > 5000 or len(_dedup_persistent) > Config.DEDUP_MAX_ENTRIES:
         _seen_msg_ids.clear()
+        _prune_dedup()
+        _save_dedup()
     return False
 
+
 async def _dedup_command(uid: str, command: str) -> bool:
-    """Return True if this user is on cooldown for this command."""
     key = f"{uid}|{command}"
     now = time.time()
     last = _command_cooldown.get(key, 0)
     if now - last < COMMAND_COOLDOWN_S:
         return True
     _command_cooldown[key] = now
-    # Periodic cleanup of old entries
     if len(_command_cooldown) > 5000:
-        cutoff = now - COMMAND_COOLDOWN_S * 5
+        cutoff = now - COMMAND_COOLDOWN_S * 10
         dead = [k for k, v in _command_cooldown.items() if v < cutoff]
         for k in dead:
             del _command_cooldown[k]
@@ -279,143 +346,221 @@ async def _dedup_command(uid: str, command: str) -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 7.  DATA STORES
+# 8.  DATA STORES  (accounts + banned only)
 # ══════════════════════════════════════════════════════════════════════════════
 accounts: dict[str, dict] = {}
 banned:   dict[str, str]  = {}
-members:  dict[str, dict] = {}
 
-def _default_account(name, bio, avatar_url=""):
+_accounts_lock = asyncio.Lock()
+_banned_lock = asyncio.Lock()
+
+_pending_accounts_save = False
+_pending_banned_save = False
+
+# In-memory nickname → uid index for fast /view lookups
+_nickname_index: dict[str, str] = {}
+
+
+def _default_account(name: str, bio: str, nickname: str = "", avatar_url: str = "") -> dict:
+    """
+    Create a new account. `nickname` is the normalized Kyodo name,
+    captured once at signup and stored permanently for /view lookups.
+    """
     return {
-        "name": name, "bio": bio, "bio_removed": False,
-        "games_played": 0, "wins": 0, "wealth": 0,
-        "owned_assets": ["bgdefault","framedefault","bubbledefault"],
-        "active_bg": "bgdefault", "active_frame": "framedefault",
-        "active_bubble": "bubbledefault", "active_colour": "black",
-        "game_stats": {}, "avatar_url": avatar_url,
+        "name": name,                   # chosen profile name
+        "nickname": nickname,           # normalized Kyodo name (captured at signup)
+        "bio": bio,
+        "bio_removed": False,
+        "games_played": 0,
+        "wins": 0,
+        "wealth": 0,
+        "owned_assets": ["bgdefault", "framedefault", "bubbledefault"],
+        "active_bg": "bgdefault",
+        "active_frame": "framedefault",
+        "active_bubble": "bubbledefault",
+        "active_colour": "black",
+        "game_stats": {},
+        "avatar_url": avatar_url,
     }
 
-# ── GitHub-backed load/save ──────────────────────────────────────────────────
+
+def _rebuild_nickname_index():
+    """Rebuild the nickname → uid lookup from accounts."""
+    global _nickname_index
+    _nickname_index = {}
+    for uid, data in accounts.items():
+        nick = data.get("nickname", "")
+        if nick:
+            _nickname_index[normalize_text(nick)] = uid
+        name = data.get("name", "")
+        if name:
+            _nickname_index[normalize_text(name)] = uid
+
+
+def resolve_user(query: str) -> str | None:
+    """
+    Find a user ID by profile name OR Kyodo nickname.
+    Handles fancy fonts, Arabic, case differences via normalize_text().
+    """
+    if not query:
+        return None
+
+    q = query.strip()
+    q_lower = q.lower()
+    q_norm = normalize_text(q)
+
+    # 1. Exact case-insensitive name match
+    for uid, data in accounts.items():
+        if data.get("name", "").lower() == q_lower:
+            return uid
+
+    # 2. Exact nickname match (case-insensitive)
+    for uid, data in accounts.items():
+        if data.get("nickname", "").lower() == q_lower:
+            return uid
+
+    # 3. Normalized match (handles fancy fonts, Unicode variations)
+    for uid, data in accounts.items():
+        if names_match(data.get("name", ""), q):
+            return uid
+        if names_match(data.get("nickname", ""), q):
+            return uid
+
+    # 4. In-memory nickname index (fast O(1))
+    if q_norm in _nickname_index:
+        return _nickname_index[q_norm]
+
+    # 5. Partial match on name (last resort)
+    for uid, data in accounts.items():
+        name = data.get("name", "")
+        if q_lower in name.lower() or normalize_text(name) == q_norm:
+            return uid
+        nick = data.get("nickname", "")
+        if q_lower in nick.lower() or normalize_text(nick) == q_norm:
+            return uid
+
+    return None
+
+
+# ── Load/Save ────────────────────────────────────────────────────────────────
 
 async def load_all():
-    """Pull latest from GitHub first, fall back to local files."""
-    global accounts, banned, members
+    global accounts, banned
 
-    # Try GitHub first
     github_data = await pull_all()
 
-    # Accounts
     acc = github_data.get("accounts.json")
-    if acc is not None:
+    if acc is not None and isinstance(acc, dict):
         accounts = acc
         json_write(Config.ACCOUNTS_FILE, accounts)
     else:
         accounts = json_read(Config.ACCOUNTS_FILE, {})
 
-    # Banned
     ban = github_data.get("banned.json")
-    if ban is not None:
+    if ban is not None and isinstance(ban, dict):
         banned = ban
         json_write(Config.BANNED_FILE, banned)
     else:
         banned = json_read(Config.BANNED_FILE, {})
 
-    # Members
-    mem = github_data.get("members.json")
-    if mem is not None:
-        members = mem
-        json_write(Config.MEMBERS_FILE, members)
-    else:
-        members = json_read(Config.MEMBERS_FILE, {})
+    _rebuild_nickname_index()
+    _load_dedup()
 
-def save_accounts():
-    """Save locally + queue GitHub sync."""
-    try:
-        json_write(Config.ACCOUNTS_FILE, accounts)
-        schedule_push("accounts.json", accounts)
-    except Exception as e:
-        logger.exception(f"[accounts] {e}")
+    logger.info(f"Data loaded — accounts:{len(accounts)} banned:{len(banned)}")
 
-def save_banned():
-    """Save locally + queue GitHub sync."""
-    try:
-        json_write(Config.BANNED_FILE, banned)
-        schedule_push("banned.json", banned)
-    except Exception as e:
-        logger.exception(f"[banned] {e}")
 
-def save_members():
-    """Save locally + queue GitHub sync."""
-    try:
-        json_write(Config.MEMBERS_FILE, members)
-        schedule_push("members.json", members)
-    except Exception as e:
-        logger.exception(f"[members] {e}")
+# ── Save functions ──────────────────────────────────────────────────────────
 
-async def scan_members():
-    found={}; pt=None
-    AV=["icon","avatarUrl","avatar_url","avatar","profileImage","profilePicture",
-        "profileImg","photo","image","iconUrl","picture","thumbnail"]
+async def save_accounts():
+    global _pending_accounts_save
+    async with _accounts_lock:
+        try:
+            json_write(Config.ACCOUNTS_FILE, accounts)
+            if not _pending_accounts_save:
+                _pending_accounts_save = True
+                schedule_push("accounts.json", accounts)
+                _pending_accounts_save = False
+        except Exception as e:
+            logger.exception(f"[accounts] save error: {e}")
+
+
+async def save_banned():
+    global _pending_banned_save
+    async with _banned_lock:
+        try:
+            json_write(Config.BANNED_FILE, banned)
+            if not _pending_banned_save:
+                _pending_banned_save = True
+                schedule_push("banned.json", banned)
+                _pending_banned_save = False
+        except Exception as e:
+            logger.exception(f"[banned] save error: {e}")
+
+
+def save_accounts_sync():
     try:
-        while True:
-            res=await client.get_chat_users(Config.CHAT_ID,Config.CIRCLE_ID,pageToken=pt)
-            for entry in res.data.get("chatMemberList",[]):
-                user=entry.get("user",{}); uid=entry.get("uid") or user.get("uid"); nick=user.get("nickname")
-                av=""
-                for f in AV:
-                    v=user.get(f) or entry.get(f)
-                    if v and isinstance(v,str) and v.startswith("http"): av=v; break
-                if uid and nick:
-                    key=nick.lower()
-                    found[key]={"nickname":nick,"userId":uid,"avatar_url":av or members.get(key,{}).get("avatar_url","")}
-                    if uid in accounts and av: accounts[uid]["avatar_url"]=av; save_accounts()
-            pt=res.pagination.get("fwd") if res.pagination else None
-            if not pt: break
-        for k in [k for k in members if k not in found]: del members[k]
-        members.update(found); save_members(); save_accounts()
-        logger.info(f"[members] {len(members)} members")
-    except Exception as e: logger.exception(f"[scan] {e}")
+        loop = asyncio.get_running_loop()
+        loop.create_task(save_accounts())
+    except RuntimeError:
+        pass
+
+
+def save_banned_sync():
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(save_banned())
+    except RuntimeError:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 8.  ECONOMY HELPERS
+# 9.  ECONOMY HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 def has_account(uid): return uid in accounts
 def is_banned(uid):   return uid in banned
-def get_balance(uid): return accounts.get(uid,{}).get("wealth",0)
+def get_balance(uid): return accounts.get(uid, {}).get("wealth", 0)
+
 
 def add_sorex(uid, amount):
-    if uid in accounts: accounts[uid]["wealth"]=accounts[uid].get("wealth",0)+amount; save_accounts()
+    if uid in accounts:
+        accounts[uid]["wealth"] = accounts[uid].get("wealth", 0) + amount
+        save_accounts_sync()
+
 
 def deduct_sorex(uid, amount):
-    if uid in accounts and accounts[uid].get("wealth",0)>=amount:
-        accounts[uid]["wealth"]-=amount; save_accounts(); return True
+    if uid in accounts and accounts[uid].get("wealth", 0) >= amount:
+        accounts[uid]["wealth"] -= amount
+        save_accounts_sync()
+        return True
     return False
 
-def owns_asset(uid, key): return key in accounts.get(uid,{}).get("owned_assets",[])
+
+def owns_asset(uid, key): return key in accounts.get(uid, {}).get("owned_assets", [])
+
 
 def grant_asset(uid, key):
     if uid in accounts and key not in accounts[uid]["owned_assets"]:
-        accounts[uid]["owned_assets"].append(key); save_accounts()
+        accounts[uid]["owned_assets"].append(key)
+        save_accounts_sync()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 9.  RANK SYSTEM
+# 10.  RANK SYSTEM
 # ══════════════════════════════════════════════════════════════════════════════
 def get_rank(wins):
-    if wins==0:  return ""
-    if wins<=5:  return "Beginner"
-    if wins<=10: return "Apprentice"
-    if wins<=20: return "Advanced"
-    if wins<=30: return "Expert"
-    if wins<=40: return "Elite"
-    if wins<=50: return "Master"
-    if wins<=60: return "Grandmaster"
-    if wins<=79: return "Legend"
+    if wins == 0:  return ""
+    if wins <= 5:  return "Beginner"
+    if wins <= 10: return "Apprentice"
+    if wins <= 20: return "Advanced"
+    if wins <= 30: return "Expert"
+    if wins <= 40: return "Elite"
+    if wins <= 50: return "Master"
+    if wins <= 60: return "Grandmaster"
+    if wins <= 79: return "Legend"
     return "Mythic"
 
+
 def get_primary_game(uid):
-    """Return (game_name, icon_key) for the user's most-played game, or (None, None)."""
     stats = accounts.get(uid, {}).get("game_stats", {})
     if not stats:
         return None, None
@@ -425,152 +570,211 @@ def get_primary_game(uid):
     icon = next((ik for gn, ik in GAME_MAP.items() if gn.lower() == primary.lower()), None)
     return primary, icon
 
+
 def update_game_stats(uid, game_name, won):
-    if uid not in accounts: return
-    gs=accounts[uid].setdefault("game_stats",{})
-    e=gs.setdefault(game_name,{"plays":0,"wins":0})
-    e["plays"]+=1; e["wins"]+=(1 if won else 0)
-    accounts[uid]["games_played"]=accounts[uid].get("games_played",0)+1
-    if won: accounts[uid]["wins"]=accounts[uid].get("wins",0)+1
-    save_accounts()
+    if uid not in accounts:
+        return
+    gs = accounts[uid].setdefault("game_stats", {})
+    e = gs.setdefault(game_name, {"plays": 0, "wins": 0})
+    e["plays"] += 1
+    e["wins"] += (1 if won else 0)
+    accounts[uid]["games_played"] = accounts[uid].get("games_played", 0) + 1
+    if won:
+        accounts[uid]["wins"] = accounts[uid].get("wins", 0) + 1
+    save_accounts_sync()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 10.  PROFILE CARD LAYOUT  (pixel positions — matches template.png)
+# 11.  PROFILE CARD LAYOUT & RENDERING
 # ══════════════════════════════════════════════════════════════════════════════
 LAYOUT = {
-    "bg":       {"x":-15,  "y":-15,  "size":1040},
-    "pfp":      {"x":377,  "y":250,  "size":268 },
-    "frame":    {"x":357,  "y":230,  "size":312 },
-    "bubble":   {"x":160,  "y":600,  "size":700 },
-    "gameicon": {"x":280,  "y":1130, "size":120 },
-    "name":     {"cx":511, "y":540,  "size":50,  "color":(255,255,255,255)},
-    "bio":      {"cx":510, "cy":720, "size":34,  "color":(30,30,30,255),
-                 "max_width":480,"max_lines":2,"line_gap":10},
-    "games":    {"cx":183, "y":935,  "size":50,  "color":(255,255,255,255)},
-    "wins":     {"cx":511, "y":935,  "size":50,  "color":(255,255,255,255)},
-    "wealth":   {"cx":770, "y":935,  "size":50,  "color":(255,255,255,255)},
-    "game":     {"x":430,  "y":1150, "size":46,  "color":(255,255,255,255)},
-    "rank":     {"x":430,  "y":1208, "size":38,  "color":(200,200,200,255)},
-    "nogame":   {"cx":511, "y":1180, "size":40,  "color":(160,160,160,255)},
+    "bg":       {"x": -15,  "y": -15,  "size": 1040},
+    "pfp":      {"x": 377,  "y": 250,  "size": 268},
+    "frame":    {"x": 357,  "y": 230,  "size": 312},
+    "bubble":   {"x": 160,  "y": 600,  "size": 700},
+    "gameicon": {"x": 280,  "y": 1130, "size": 120},
+    "name":     {"cx": 511, "y": 540,  "size": 50,  "color": (255, 255, 255, 255)},
+    "bio":      {"cx": 510, "cy": 720, "size": 34,  "color": (30, 30, 30, 255),
+                 "max_width": 480, "max_lines": 2, "line_gap": 10},
+    "games":    {"cx": 183, "y": 935,  "size": 50,  "color": (255, 255, 255, 255)},
+    "wins":     {"cx": 511, "y": 935,  "size": 50,  "color": (255, 255, 255, 255)},
+    "wealth":   {"cx": 770, "y": 935,  "size": 50,  "color": (255, 255, 255, 255)},
+    "game":     {"x": 430,  "y": 1150, "size": 46,  "color": (255, 255, 255, 255)},
+    "rank":     {"x": 430,  "y": 1208, "size": 38,  "color": (200, 200, 200, 255)},
+    "nogame":   {"cx": 511, "y": 1180, "size": 40,  "color": (160, 160, 160, 255)},
 }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 11.  PROFILE CARD RENDERING
-# ══════════════════════════════════════════════════════════════════════════════
 def _font(text, size):
-    p=Config.FONT_ARABIC if is_arabic(text) else Config.FONT_LATIN
-    for q in (p,Config.FONT_LATIN):
-        try: return ImageFont.truetype(q,size)
-        except: pass
+    p = Config.FONT_ARABIC if is_arabic(text) else Config.FONT_LATIN
+    for q in (p, Config.FONT_LATIN):
+        try:
+            return ImageFont.truetype(q, size)
+        except Exception:
+            pass
     return ImageFont.load_default()
 
+
 def _cx(draw, text, cx, y, font, color):
-    t=prepare_text(text); bb=font.getbbox(t); w=bb[2]-bb[0]; sh=bb[1] if bb[1]>3 else 0
-    draw.text((cx-w//2,y-sh),t,font=font,fill=color)
+    t = prepare_text(text)
+    bb = font.getbbox(t)
+    w = bb[2] - bb[0]
+    sh = bb[1] if bb[1] > 3 else 0
+    draw.text((cx - w // 2, y - sh), t, font=font, fill=color)
+
 
 def _lx(draw, text, x, y, font, color):
-    t=prepare_text(text); bb=font.getbbox(t); sh=bb[1] if bb[1]>3 else 0
-    draw.text((x,y-sh),t,font=font,fill=color)
+    t = prepare_text(text)
+    bb = font.getbbox(t)
+    sh = bb[1] if bb[1] > 3 else 0
+    draw.text((x, y - sh), t, font=font, fill=color)
+
 
 def _wrap(text, font, mw, ml):
-    words,lines,cur=text.split(),[],""
+    words, lines, cur = text.split(), [], ""
     for w in words:
-        test=(cur+" "+w).strip()
-        if font.getbbox(prepare_text(test))[2]-font.getbbox(prepare_text(test))[0]<=mw: cur=test
+        test = (cur + " " + w).strip()
+        test_width = font.getbbox(prepare_text(test))[2] - font.getbbox(prepare_text(test))[0]
+        if test_width <= mw:
+            cur = test
         else:
-            if cur: lines.append(cur)
-            cur=w
-            if len(lines)>=ml: cur=""; break
-    if cur and len(lines)<ml: lines.append(cur)
-    lines=lines[:ml]
+            if cur:
+                lines.append(cur)
+            cur = w
+            if len(lines) >= ml:
+                cur = ""
+                break
+    if cur and len(lines) < ml:
+        lines.append(cur)
+    lines = lines[:ml]
     if lines:
-        last=lines[-1]
-        if font.getbbox(prepare_text(last))[2]>mw:
+        last = lines[-1]
+        last_width = font.getbbox(prepare_text(last))[2]
+        if last_width > mw:
             while last:
-                if font.getbbox(prepare_text(last+"..."))[2]<=mw: lines[-1]=last+"..."; break
-                last=last[:-1]
+                ellipsis_width = font.getbbox(prepare_text(last + "..."))[2]
+                if ellipsis_width <= mw:
+                    lines[-1] = last + "..."
+                    break
+                last = last[:-1]
     return lines
 
+
 def _hex_rgba(h):
-    h=h.lstrip("#"); return(int(h[0:2],16),int(h[2:4],16),int(h[4:6],16),255)
+    h = h.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
+
 
 def _circular(img, size):
-    w,h=img.size; m=min(w,h)
-    img=img.crop(((w-m)//2,(h-m)//2,(w+m)//2,(h+m)//2)).resize((size,size),Image.LANCZOS)
-    mask=Image.new("L",(size*3,size*3),0)
-    ImageDraw.Draw(mask).ellipse((0,0,size*3-1,size*3-1),fill=255)
-    mask=mask.resize((size,size),Image.LANCZOS); img.putalpha(mask); return img
+    w, h = img.size
+    m = min(w, h)
+    img = img.crop(((w - m) // 2, (h - m) // 2, (w + m) // 2, (h + m) // 2)).resize((size, size), Image.LANCZOS)
+    mask = Image.new("L", (size * 3, size * 3), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, size * 3 - 1, size * 3 - 1), fill=255)
+    mask = mask.resize((size, size), Image.LANCZOS)
+    img.putalpha(mask)
+    return img
+
 
 def _paste(base, key, x, y, size, circ=False):
-    fn=ASSETS.get(key)
+    fn = ASSETS.get(key)
     if not fn:
         return base
     fn = os.path.join(BASE_DIR, fn)
     if not os.path.exists(fn):
         return base
-    img=Image.open(fn).convert("RGBA")
+    img = Image.open(fn).convert("RGBA")
     if circ:
-        img=_circular(img,size); tmp=Image.new("RGBA",base.size,(0,0,0,0)); tmp.paste(img,(x,y),img)
+        img = _circular(img, size)
+        tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        tmp.paste(img, (x, y), img)
     else:
-        ow,oh=img.size; img=img.resize((size,int(size*oh/ow)),Image.LANCZOS)
-        tmp=Image.new("RGBA",base.size,(0,0,0,0)); tmp.paste(img,(x,y),img)
-    return Image.alpha_composite(base,tmp)
+        ow, oh = img.size
+        img = img.resize((size, int(size * oh / ow)), Image.LANCZOS)
+        tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        tmp.paste(img, (x, y), img)
+    return Image.alpha_composite(base, tmp)
+
 
 def _paste_raw(base, raw_bytes, x, y, size):
-    img=_circular(Image.open(BytesIO(raw_bytes)).convert("RGBA"),size)
-    tmp=Image.new("RGBA",base.size,(0,0,0,0)); tmp.paste(img,(x,y),img)
-    return Image.alpha_composite(base,tmp)
+    img = _circular(Image.open(BytesIO(raw_bytes)).convert("RGBA"), size)
+    tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    tmp.paste(img, (x, y), img)
+    return Image.alpha_composite(base, tmp)
+
 
 async def _dl(url):
     try:
-        c=await http(); r=await c.get(url,timeout=Config.HTTP_TIMEOUT)
-        if r.status_code==200: return r.content
-    except Exception as e: logger.warning(f"[dl] {e}")
+        c = await http()
+        r = await c.get(url, timeout=Config.HTTP_TIMEOUT)
+        if r.status_code == 200:
+            return r.content
+    except Exception as e:
+        logger.warning(f"[dl] {e}")
     return None
 
+
 async def render_profile_card(uid: str) -> BytesIO | None:
-    user=accounts.get(uid)
-    if not user or not os.path.exists(Config.TEMPLATE_PATH): return None
+    user = accounts.get(uid)
+    if not user or not os.path.exists(Config.TEMPLATE_PATH):
+        return None
     try:
-        base=Image.open(Config.TEMPLATE_PATH).convert("RGBA"); L=LAYOUT
-        base=_paste(base,user.get("active_bg","bgdefault"),L["bg"]["x"],L["bg"]["y"],L["bg"]["size"])
-        av=user.get("avatar_url","")
+        base = Image.open(Config.TEMPLATE_PATH).convert("RGBA")
+        L = LAYOUT
+        base = _paste(base, user.get("active_bg", "bgdefault"), L["bg"]["x"], L["bg"]["y"], L["bg"]["size"])
+        av = user.get("avatar_url", "")
         if av:
-            raw=await _dl(av)
-            if raw: base=_paste_raw(base,raw,L["pfp"]["x"],L["pfp"]["y"],L["pfp"]["size"])
-        base=_paste(base,user.get("active_frame","framedefault"),L["frame"]["x"],L["frame"]["y"],L["frame"]["size"])
-        base=_paste(base,user.get("active_bubble","bubbledefault"),L["bubble"]["x"],L["bubble"]["y"],L["bubble"]["size"])
-        pg,ik=get_primary_game(uid); hg=pg is not None and ik is not None
-        if hg: base=_paste(base,ik,L["gameicon"]["x"],L["gameicon"]["y"],L["gameicon"]["size"],circ=True)
-        draw=ImageDraw.Draw(base)
-        # Name
-        cfg=L["name"]; _cx(draw,user["name"],cfg["cx"],cfg["y"],_font(user["name"],cfg["size"]),cfg["color"])
-        # Bio
-        cfg=L["bio"]
-        bt="Empty" if user.get("bio_removed") else (user.get("bio") or "")
-        bc=_hex_rgba(COLOR_MAP.get(user.get("active_colour","black"),"#1E1E1E"))
-        font=_font(bt,cfg["size"]); lines=_wrap(bt,font,cfg["max_width"],cfg["max_lines"])
-        lh=cfg["size"]+cfg["line_gap"]; total=len(lines)*cfg["size"]+max(0,len(lines)-1)*cfg["line_gap"]
-        yc=cfg["cy"]-total//2
-        for line in lines:
-            t=prepare_text(line); bb=font.getbbox(t); w=bb[2]-bb[0]; sh=bb[1] if bb[1]>3 else 0
-            draw.text((cfg["cx"]-w//2,yc-sh),t,font=font,fill=bc); yc+=lh
-        # Stats
-        for fld,val in (("games",str(user.get("games_played",0))),
-                         ("wins",str(user.get("wins",0))),
-                         ("wealth",str(user.get("wealth",0)))):
-            cfg=L[fld]; _cx(draw,val,cfg["cx"],cfg["y"],_font(val,cfg["size"]),cfg["color"])
-        # Game section
+            raw = await _dl(av)
+            if raw:
+                base = _paste_raw(base, raw, L["pfp"]["x"], L["pfp"]["y"], L["pfp"]["size"])
+        base = _paste(base, user.get("active_frame", "framedefault"), L["frame"]["x"], L["frame"]["y"], L["frame"]["size"])
+        base = _paste(base, user.get("active_bubble", "bubbledefault"), L["bubble"]["x"], L["bubble"]["y"], L["bubble"]["size"])
+        pg, ik = get_primary_game(uid)
+        hg = pg is not None and ik is not None
         if hg:
-            rank=get_rank(user.get("wins",0))
-            cfg=L["game"]; _lx(draw,pg,cfg["x"],cfg["y"],_font(pg,cfg["size"]),cfg["color"])
+            base = _paste(base, ik, L["gameicon"]["x"], L["gameicon"]["y"], L["gameicon"]["size"], circ=True)
+        draw = ImageDraw.Draw(base)
+
+        cfg = L["name"]
+        _cx(draw, user["name"], cfg["cx"], cfg["y"], _font(user["name"], cfg["size"]), cfg["color"])
+
+        cfg = L["bio"]
+        bt = "Empty" if user.get("bio_removed") else (user.get("bio") or "")
+        bc = _hex_rgba(COLOR_MAP.get(user.get("active_colour", "black"), "#1E1E1E"))
+        font = _font(bt, cfg["size"])
+        lines = _wrap(bt, font, cfg["max_width"], cfg["max_lines"])
+        lh = cfg["size"] + cfg["line_gap"]
+        total = len(lines) * cfg["size"] + max(0, len(lines) - 1) * cfg["line_gap"]
+        yc = cfg["cy"] - total // 2
+        for line in lines:
+            t = prepare_text(line)
+            bb = font.getbbox(t)
+            w = bb[2] - bb[0]
+            sh = bb[1] if bb[1] > 3 else 0
+            draw.text((cfg["cx"] - w // 2, yc - sh), t, font=font, fill=bc)
+            yc += lh
+
+        for fld, val in (("games", str(user.get("games_played", 0))),
+                         ("wins", str(user.get("wins", 0))),
+                         ("wealth", str(user.get("wealth", 0)))):
+            cfg = L[fld]
+            _cx(draw, val, cfg["cx"], cfg["y"], _font(val, cfg["size"]), cfg["color"])
+
+        if hg:
+            rank = get_rank(user.get("wins", 0))
+            cfg = L["game"]
+            _lx(draw, pg, cfg["x"], cfg["y"], _font(pg, cfg["size"]), cfg["color"])
             if rank:
-                cfg=L["rank"]; _lx(draw,rank,cfg["x"],cfg["y"],_font(rank,cfg["size"]),cfg["color"])
+                cfg = L["rank"]
+                _lx(draw, rank, cfg["x"], cfg["y"], _font(rank, cfg["size"]), cfg["color"])
         else:
-            cfg=L["nogame"]; _cx(draw,"No games",cfg["cx"],cfg["y"],_font("No games",cfg["size"]),cfg["color"])
-        out=BytesIO(); base.convert("RGB").save(out,"JPEG",quality=Config.OUTPUT_QUALITY); out.seek(0); return out
+            cfg = L["nogame"]
+            _cx(draw, "No games", cfg["cx"], cfg["y"], _font("No games", cfg["size"]), cfg["color"])
+
+        out = BytesIO()
+        base.convert("RGB").save(out, "JPEG", quality=Config.OUTPUT_QUALITY)
+        out.seek(0)
+        return out
     except Exception as e:
         logger.exception(f"[render] {e}")
         return None
@@ -580,44 +784,35 @@ async def render_profile_card(uid: str) -> BytesIO | None:
 # 12.  IMAGE SENDING
 # ══════════════════════════════════════════════════════════════════════════════
 async def send_image_bytes(chat_id, circle_id, img_bytes):
-    with tempfile.NamedTemporaryFile(suffix=".jpg",delete=False) as f:
-        f.write(img_bytes.read()); tmp=f.name
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        f.write(img_bytes.read())
+        tmp = f.name
     try:
-        img=Image.open(tmp); w,h=img.size
-        with open(tmp,"rb") as f: media=await client.upload_media(f,MediaTarget.ChatImageMessage)
-        await client.send_chat_entity(chat_id,{"content":f"{media.url}?wh={w}x{h}"},ChatMessageTypes.Photo,circle_id)
+        img = Image.open(tmp)
+        w, h = img.size
+        with open(tmp, "rb") as f:
+            media = await client.upload_media(f, MediaTarget.ChatImageMessage)
+        await client.send_chat_entity(
+            chat_id,
+            {"content": f"{media.url}?wh={w}x{h}"},
+            ChatMessageTypes.Photo,
+            circle_id,
+        )
     finally:
-        with suppress(FileNotFoundError): os.remove(tmp)
+        with suppress(FileNotFoundError):
+            os.remove(tmp)
+
 
 async def send_profile_card(uid, chat_id, circle_id):
-    card=await render_profile_card(uid)
+    card = await render_profile_card(uid)
     if card:
-        await send_image_bytes(chat_id,circle_id,card)
+        await send_image_bytes(chat_id, circle_id, card)
     else:
-        await client.send_message(chat_id,
-            "⚠️ Could not render the profile card. Check that template.png and fonts are present.",circle_id)
-
-async def send_welcome_card(chat_id, circle_id, avatar_url, nickname):
-    """Send a welcome card — only used by manual yulia welcome command."""
-    try:
-        c=await http(); r=await c.get(avatar_url,timeout=Config.HTTP_TIMEOUT)
-        if r.status_code!=200: raise ValueError("bad status")
-        pfp=Image.open(BytesIO(r.content)).convert("RGBA")
-        w,h=pfp.size; m=min(w,h)
-        pfp=pfp.crop(((w-m)//2,(h-m)//2,(w+m)//2,(h+m)//2)).resize(Config.WELCOME_PROFILE_SIZE,Image.LANCZOS)
-        bs=(pfp.size[0]*3,pfp.size[1]*3); mask=Image.new("L",bs,0)
-        ImageDraw.Draw(mask).ellipse((0,0)+bs,fill=255)
-        mask=mask.resize(pfp.size,Image.LANCZOS); pfp.putalpha(mask)
-        base=Image.open(Config.WELCOME_BG).convert("RGBA")
-        base.paste(pfp,Config.WELCOME_PROFILE_POSITION,pfp)
-        if base.width>Config.MAX_OUTPUT_WIDTH:
-            ratio=Config.MAX_OUTPUT_WIDTH/base.width
-            base=base.resize((Config.MAX_OUTPUT_WIDTH,int(base.height*ratio)),Image.LANCZOS)
-        buf=BytesIO(); base.convert("RGB").save(buf,"JPEG",quality=75,optimize=True); buf.seek(0)
-        await send_image_bytes(chat_id,circle_id,buf)
-    except Exception as e:
-        logger.warning(f"[welcome card render failed] {e}")
-        await client.send_message(chat_id, f"⚠️ Failed to render welcome card for '{nickname}'.", circle_id)
+        await client.send_message(
+            chat_id,
+            "⚠️ Could not render the profile card. Check that template.png and fonts are present.",
+            circle_id,
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -625,42 +820,81 @@ async def send_welcome_card(chat_id, circle_id, avatar_url, nickname):
 # ══════════════════════════════════════════════════════════════════════════════
 signup_states: dict[str, dict] = {}
 
+
 async def handle_signup(message):
-    uid=message.author.userId; cid=message.chatId; circ=message.circleId
+    uid = message.author.userId
+    cid = message.chatId
+    circ = message.circleId
     if has_account(uid):
-        await client.send_message(cid,
-            f"✅ You already have a profile, {accounts[uid]['name']}!\nUse /profile to view it.",circ); return
+        await client.send_message(
+            cid,
+            f"✅ You already have a profile, {accounts[uid]['name']}!\nUse /profile to view it.",
+            circ,
+        )
+        return
     if uid in signup_states:
-        step=signup_states[uid]["step"]
-        await client.send_message(cid,
-            f"⏳ Signup in progress! Reply with:  {'Name: YourName' if step=='name' else 'Bio: your bio'}",circ); return
+        step = signup_states[uid]["step"]
+        await client.send_message(
+            cid,
+            f"⏳ Signup in progress! Reply with:  {'Name: YourName' if step == 'name' else 'Bio: your bio'}",
+            circ,
+        )
+        return
     signup_states[uid] = {"step": "name"}
-    await client.send_message(cid,
-        "👋 Welcome! Let's create your profile.\n\n❓ *What is your name?*\nReply with:   Name: YourName",circ)
+    await client.send_message(
+        cid,
+        "👋 Welcome! Let's create your profile.\n\n❓ *What is your name?*\nReply with:   Name: YourName",
+        circ,
+    )
+
 
 async def handle_signup_step(message, content) -> bool:
-    uid=message.author.userId
-    if uid not in signup_states: return False
-    state=signup_states[uid]; cid=message.chatId; circ=message.circleId
-    if state["step"]=="name":
-        if not content.lower().startswith("name:"): return False
-        name=content[5:].strip()
-        if not name: await client.send_message(cid,"⚠️ Name can't be empty.",circ); return True
-        if len(name)>30: await client.send_message(cid,f"⚠️ Name too long ({len(name)}). Max 30.",circ); return True
-        state["temp_name"]=name; state["step"]="bio"
-        await client.send_message(cid,
-            f"✅ Name: *{name}*\n\n📝 *Put a bio that describes you.*\nReply with:   Bio: your bio here",circ)
+    uid = message.author.userId
+    if uid not in signup_states:
+        return False
+    state = signup_states[uid]
+    cid = message.chatId
+    circ = message.circleId
+    if state["step"] == "name":
+        if not content.lower().startswith("name:"):
+            return False
+        name = content[5:].strip()
+        if not name:
+            await client.send_message(cid, "⚠️ Name can't be empty.", circ)
+            return True
+        if len(name) > 30:
+            await client.send_message(cid, f"⚠️ Name too long ({len(name)}). Max 30.", circ)
+            return True
+        state["temp_name"] = name
+        state["step"] = "bio"
+        await client.send_message(
+            cid,
+            f"✅ Name: *{name}*\n\n📝 *Put a bio that describes you.*\nReply with:   Bio: your bio here",
+            circ,
+        )
         return True
-    if state["step"]=="bio":
-        if not content.lower().startswith("bio:"): return False
-        bio=content[4:].strip()
-        if len(bio)>100: await client.send_message(cid,f"⚠️ Bio too long ({len(bio)}). Max 100.",circ); return True
-        av=next((m.get("avatar_url","") for m in members.values() if m["userId"]==uid),"")
-        accounts[uid]=_default_account(state["temp_name"],bio,av)
-        del signup_states[uid]; save_accounts()
-        await client.send_message(cid,
+    if state["step"] == "bio":
+        if not content.lower().startswith("bio:"):
+            return False
+        bio = content[4:].strip()
+        if len(bio) > 100:
+            await client.send_message(cid, f"⚠️ Bio too long ({len(bio)}). Max 100.", circ)
+            return True
+
+        # Capture the user's actual Kyodo nickname (normalized) at signup time
+        kyodo_nick = normalize_text(getattr(message.author, "nickname", ""))
+        av = getattr(message.author, "avatar_url", None) or ""
+
+        accounts[uid] = _default_account(state["temp_name"], bio, kyodo_nick, av)
+        del signup_states[uid]
+        _rebuild_nickname_index()
+        await save_accounts()
+        await client.send_message(
+            cid,
             f"🎉 Profile created!\n━━━━━━━━━━━━━━━━━━\n"
-            f"👤 {accounts[uid]['name']}\n📝 {bio}\n💰 0 sorex\n━━━━━━━━━━━━━━━━━━\nUse /profile to view your card!",circ)
+            f"👤 {accounts[uid]['name']}\n📝 {bio}\n💰 0 sorex\n━━━━━━━━━━━━━━━━━━\nUse /profile to view your card!",
+            circ,
+        )
         return True
     return False
 
@@ -669,184 +903,404 @@ async def handle_signup_step(message, content) -> bool:
 # 14.  COMMAND HANDLERS
 # ══════════════════════════════════════════════════════════════════════════════
 async def cmd_profile(msg):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid):
-        await client.send_message(cid,"❌ No profile yet. Use /signup!",circ); return
-    await send_profile_card(uid,cid,circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ No profile yet. Use /signup!", circ)
+            return
+        if await _dedup_command(uid, "/profile"):
+            return
+        await send_profile_card(uid, cid, circ)
+    except Exception:
+        logger.exception("[cmd_profile]")
+
 
 async def cmd_view(msg, target_name):
-    cid=msg.chatId; circ=msg.circleId
-    uid=next((u for u,d in accounts.items() if d.get("name","").lower()==target_name.lower()),None)
-    if not uid:
-        m=members.get(target_name.lower())
-        if m and m["userId"] in accounts: uid=m["userId"]
-    if not uid: await client.send_message(cid,f"❌ No profile found for *{target_name}*.",circ); return
-    await send_profile_card(uid,cid,circ)
+    """View a profile by name OR Kyodo nickname. Handles Arabic & fancy fonts."""
+    try:
+        cid = msg.chatId
+        circ = msg.circleId
+        if await _dedup_command(msg.author.userId, "/view"):
+            return
+
+        uid = resolve_user(target_name)
+        if not uid:
+            await client.send_message(cid, f"❌ No profile found for *{target_name}*.", circ)
+            return
+        await send_profile_card(uid, cid, circ)
+    except Exception:
+        logger.exception("[cmd_view]")
+
 
 async def cmd_buy(msg, args):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid): await client.send_message(cid,"❌ Use /signup first!",circ); return
-    parts=args.split()
-    if len(parts)<2:
-        await client.send_message(cid,"Usage:\n  /buy frame 1\n  /buy bubble 2\n  /buy bg 3\n  /buy colour white",circ); return
-    cat=parts[0].lower(); item=parts[1].lower()
-    if cat not in ("frame","bubble","bg","colour"):
-        await client.send_message(cid,"❌ Categories: frame / bubble / bg / colour",circ); return
-    key=item if cat=="colour" else cat+item
-    if key not in ASSETS: await client.send_message(cid,f"❌ Asset *{key}* doesn't exist.",circ); return
-    price=get_price(key)
-    if price==0: await client.send_message(cid,f"✅ *{key}* is free! Use /use to equip it.",circ); return
-    if owns_asset(uid,key): await client.send_message(cid,f"✅ You already own *{key}*. Use /use.",circ); return
-    bal=get_balance(uid)
-    if bal<price: await client.send_message(cid,f"❌ Not enough sorex!\n   Cost: {price}  |  Balance: {bal}",circ); return
-    deduct_sorex(uid,price); grant_asset(uid,key)
-    await client.send_message(cid,
-        f"✅ Purchased *{key}* for {price} sorex!\n💰 Balance: {get_balance(uid)} sorex\nUse /use {cat} {item} to equip it.",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ Use /signup first!", circ)
+            return
+        if await _dedup_command(uid, "/buy"):
+            return
+        parts = args.split()
+        if len(parts) < 2:
+            await client.send_message(
+                cid,
+                "Usage:\n  /buy frame 1\n  /buy bubble 2\n  /buy bg 3\n  /buy colour white",
+                circ,
+            )
+            return
+        cat = parts[0].lower()
+        item = parts[1].lower()
+        if cat not in ("frame", "bubble", "bg", "colour"):
+            await client.send_message(cid, "❌ Categories: frame / bubble / bg / colour", circ)
+            return
+        key = item if cat == "colour" else cat + item
+        if key not in ASSETS:
+            await client.send_message(cid, f"❌ Asset *{key}* doesn't exist.", circ)
+            return
+        price = get_price(key)
+        if price == 0:
+            await client.send_message(cid, f"✅ *{key}* is free! Use /use to equip it.", circ)
+            return
+        if owns_asset(uid, key):
+            await client.send_message(cid, f"✅ You already own *{key}*. Use /use.", circ)
+            return
+        bal = get_balance(uid)
+        if bal < price:
+            await client.send_message(cid, f"❌ Not enough sorex!\n   Cost: {price}  |  Balance: {bal}", circ)
+            return
+        deduct_sorex(uid, price)
+        grant_asset(uid, key)
+        await client.send_message(
+            cid,
+            f"✅ Purchased *{key}* for {price} sorex!\n💰 Balance: {get_balance(uid)} sorex\nUse /use {cat} {item} to equip it.",
+            circ,
+        )
+    except Exception:
+        logger.exception("[cmd_buy]")
+
 
 async def cmd_use(msg, args):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid): await client.send_message(cid,"❌ Use /signup first!",circ); return
-    parts=args.split()
-    if len(parts)<2:
-        await client.send_message(cid,"Usage:\n  /use frame 1\n  /use bubble 2\n  /use bg 3\n  /use colour white",circ); return
-    cat=parts[0].lower(); item=parts[1].lower()
-    if cat not in ("frame","bubble","bg","colour"):
-        await client.send_message(cid,"❌ Categories: frame / bubble / bg / colour",circ); return
-    key=item if cat=="colour" else cat+item
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ Use /signup first!", circ)
+            return
+        if await _dedup_command(uid, "/use"):
+            return
+        parts = args.split()
+        if len(parts) < 2:
+            await client.send_message(
+                cid,
+                "Usage:\n  /use frame 1\n  /use bubble 2\n  /use bg 3\n  /use colour white",
+                circ,
+            )
+            return
+        cat = parts[0].lower()
+        item = parts[1].lower()
+        if cat not in ("frame", "bubble", "bg", "colour"):
+            await client.send_message(cid, "❌ Categories: frame / bubble / bg / colour", circ)
+            return
+        key = item if cat == "colour" else cat + item
 
-    if cat=="colour":
-        if key not in COLOR_MAP:
-            await client.send_message(cid,f"❌ Unknown colour. Options: {', '.join(COLOR_MAP.keys())}",circ); return
-        if key!="black" and not owns_asset(uid,key):
-            await client.send_message(cid,
-                f"❌ You don't own colour *{key}*.\nBuy it:  /buy colour {key}  ({get_price(key)} sorex)",circ); return
-        accounts[uid]["active_colour"]=key; save_accounts()
-        await client.send_message(cid,f"🎨 Bio colour changed to *{key}*!",circ)
-        await send_profile_card(uid,cid,circ)   # ← auto-show updated card
-        return
+        if cat == "colour":
+            if key not in COLOR_MAP:
+                await client.send_message(
+                    cid,
+                    f"❌ Unknown colour. Options: {', '.join(COLOR_MAP.keys())}",
+                    circ,
+                )
+                return
+            if key != "black" and not owns_asset(uid, key):
+                await client.send_message(
+                    cid,
+                    f"❌ You don't own colour *{key}*.\nBuy it:  /buy colour {key}  ({get_price(key)} sorex)",
+                    circ,
+                )
+                return
+            accounts[uid]["active_colour"] = key
+            await save_accounts()
+            await client.send_message(cid, f"🎨 Bio colour changed to *{key}*!", circ)
+            await send_profile_card(uid, cid, circ)
+            return
 
-    if key not in ASSETS: await client.send_message(cid,f"❌ Asset *{key}* doesn't exist.",circ); return
-    if get_price(key)==0 or owns_asset(uid,key):
-        accounts[uid][f"active_{cat}"]=key; save_accounts()
-        await client.send_message(cid,f"✅ Equipped *{key}*!",circ)
-        await send_profile_card(uid,cid,circ)   # ← auto-show updated card
-    else:
-        await client.send_message(cid,
-            f"❌ You don't own *{key}*.\nBuy it:  /buy {cat} {item}  ({get_price(key)} sorex)",circ)
+        if key not in ASSETS:
+            await client.send_message(cid, f"❌ Asset *{key}* doesn't exist.", circ)
+            return
+        if get_price(key) == 0 or owns_asset(uid, key):
+            accounts[uid][f"active_{cat}"] = key
+            await save_accounts()
+            await client.send_message(cid, f"✅ Equipped *{key}*!", circ)
+            await send_profile_card(uid, cid, circ)
+        else:
+            await client.send_message(
+                cid,
+                f"❌ You don't own *{key}*.\nBuy it:  /buy {cat} {item}  ({get_price(key)} sorex)",
+                circ,
+            )
+    except Exception:
+        logger.exception("[cmd_use]")
+
 
 async def cmd_remove_bio(msg):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid): await client.send_message(cid,"❌ Use /signup first!",circ); return
-    accounts[uid]["bio_removed"]=True; accounts[uid]["bio"]=""; save_accounts()
-    await client.send_message(cid,"🗑️ Bio removed. Bubble will show *Empty*.\nAdd one:  /set bio your text",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ Use /signup first!", circ)
+            return
+        if await _dedup_command(uid, "/remove bio"):
+            return
+        accounts[uid]["bio_removed"] = True
+        accounts[uid]["bio"] = ""
+        await save_accounts()
+        await client.send_message(
+            cid,
+            "🗑️ Bio removed. Bubble will show *Empty*.\nAdd one:  /set bio your text",
+            circ,
+        )
+    except Exception:
+        logger.exception("[cmd_remove_bio]")
+
 
 async def cmd_set_bio(msg, bio):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid): await client.send_message(cid,"❌ Use /signup first!",circ); return
-    if len(bio)>100: await client.send_message(cid,f"⚠️ Too long ({len(bio)}). Max 100.",circ); return
-    accounts[uid]["bio"]=bio; accounts[uid]["bio_removed"]=False; save_accounts()
-    await client.send_message(cid,f"✅ Bio updated: *{bio}*",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ Use /signup first!", circ)
+            return
+        if await _dedup_command(uid, "/set bio"):
+            return
+        if len(bio) > 100:
+            await client.send_message(cid, f"⚠️ Too long ({len(bio)}). Max 100.", circ)
+            return
+        accounts[uid]["bio"] = bio
+        accounts[uid]["bio_removed"] = False
+        await save_accounts()
+        await client.send_message(cid, f"✅ Bio updated: *{bio}*", circ)
+    except Exception:
+        logger.exception("[cmd_set_bio]")
+
 
 async def cmd_set_name(msg, new_name):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid): await client.send_message(cid,"❌ Use /signup first!",circ); return
-    new_name=new_name.strip()
-    if not new_name: await client.send_message(cid,"⚠️ Name can't be empty.",circ); return
-    if len(new_name)>30: await client.send_message(cid,f"⚠️ Name too long ({len(new_name)}). Max 30.",circ); return
-    old_name=accounts[uid]["name"]
-    accounts[uid]["name"]=new_name; save_accounts()
-    await client.send_message(cid,f"✅ Name changed: *{old_name}* → *{new_name}*",circ)
+    """
+    Change the profile name. Also re-captures the user's current
+    Kyodo nickname (normalized) and stores it alongside.
+    """
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ Use /signup first!", circ)
+            return
+        if await _dedup_command(uid, "/set name"):
+            return
+        new_name = new_name.strip()
+        if not new_name:
+            await client.send_message(cid, "⚠️ Name can't be empty.", circ)
+            return
+        if len(new_name) > 30:
+            await client.send_message(cid, f"⚠️ Name too long ({len(new_name)}). Max 30.", circ)
+            return
+
+        old_name = accounts[uid]["name"]
+        accounts[uid]["name"] = new_name
+
+        # Re-capture the current Kyodo nickname (normalized)
+        current_kyodo_nick = normalize_text(getattr(msg.author, "nickname", ""))
+        if current_kyodo_nick:
+            accounts[uid]["nickname"] = current_kyodo_nick
+
+        _rebuild_nickname_index()
+        await save_accounts()
+        await client.send_message(cid, f"✅ Name changed: *{old_name}* → *{new_name}*", circ)
+    except Exception:
+        logger.exception("[cmd_set_name]")
+
 
 async def cmd_balance(msg):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if not has_account(uid): await client.send_message(cid,"❌ Use /signup first!",circ); return
-    u=accounts[uid]; rank=get_rank(u.get("wins",0)); rs=f"  |  Rank: {rank}" if rank else ""
-    await client.send_message(cid,
-        f"💰 *{u['name']}'s Balance*\n━━━━━━━━━━━━━━━━━━\n"
-        f"Sorex:  {u.get('wealth',0)}\nWins:   {u.get('wins',0)}{rs}\nGames:  {u.get('games_played',0)}",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if not has_account(uid):
+            await client.send_message(cid, "❌ Use /signup first!", circ)
+            return
+        if await _dedup_command(uid, "/balance"):
+            return
+        u = accounts[uid]
+        rank = get_rank(u.get("wins", 0))
+        rs = f"  |  Rank: {rank}" if rank else ""
+        await client.send_message(
+            cid,
+            f"💰 *{u['name']}'s Balance*\n━━━━━━━━━━━━━━━━━━\n"
+            f"Sorex:  {u.get('wealth', 0)}\nWins:   {u.get('wins', 0)}{rs}\nGames:  {u.get('games_played', 0)}",
+            circ,
+        )
+    except Exception:
+        logger.exception("[cmd_balance]")
+
 
 async def cmd_shop(msg):
-    cid=msg.chatId; circ=msg.circleId; uid=msg.author.userId
-    lines=["🛒 *Asset Shop*","━━━━━━━━━━━━━━━━━━"]
-    cats={"Backgrounds":[k for k in ASSETS if k.startswith("bg") and "default" not in k],
-          "Frames":      [k for k in ASSETS if k.startswith("frame") and "default" not in k],
-          "Bubbles":     [k for k in ASSETS if k.startswith("bubble") and "default" not in k],
-          "Colours":     [k for k in ASSETS if ASSETS[k] is None]}
-    for cat,keys in cats.items():
-        if not keys: continue
-        lines.append(f"\n{cat}:")
-        for k in sorted(keys):
-            owned="✅" if (has_account(uid) and owns_asset(uid,k)) else "  "
-            lines.append(f"  {owned} {k:<14} {get_price(k)} sorex")
-    lines+=["","━━━━━━━━━━━━━━━━━━","/buy <type> <n>  — purchase","/use <type> <n>  — equip (shows card auto)"]
-    await client.send_message(cid,"\n".join(lines),circ)
+    try:
+        cid = msg.chatId
+        circ = msg.circleId
+        uid = msg.author.userId
+        if await _dedup_command(uid, "/shop"):
+            return
+        lines = ["🛒 *Asset Shop*", "━━━━━━━━━━━━━━━━━━"]
+        cats = {
+            "Backgrounds": [k for k in ASSETS if k.startswith("bg") and "default" not in k],
+            "Frames":      [k for k in ASSETS if k.startswith("frame") and "default" not in k],
+            "Bubbles":     [k for k in ASSETS if k.startswith("bubble") and "default" not in k],
+            "Colours":     [k for k in ASSETS if ASSETS[k] is None],
+        }
+        for cat, keys in cats.items():
+            if not keys:
+                continue
+            lines.append(f"\n{cat}:")
+            for k in sorted(keys):
+                owned = "✅" if (has_account(uid) and owns_asset(uid, k)) else "  "
+                lines.append(f"  {owned} {k:<14} {get_price(k)} sorex")
+        lines += ["", "━━━━━━━━━━━━━━━━━━", "/buy <type> <n>  — purchase", "/use <type> <n>  — equip (shows card auto)"]
+        await client.send_message(cid, "\n".join(lines), circ)
+    except Exception:
+        logger.exception("[cmd_shop]")
+
 
 async def cmd_give(msg, args):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if uid!=Config.SOR_ID: return
-    parts=args.lower().split()
-    if not parts or not parts[0].isdigit():
-        await client.send_message(cid,"Usage: reply to someone and say  /give <amount> sorex",circ); return
-    amount=int(parts[0])
-    ro=(getattr(msg,"replyMessage",None) or getattr(msg,"replyTo",None) or getattr(msg,"reply",None))
-    if not ro: await client.send_message(cid,"⚠️ Reply to someone's message first.",circ); return
-    auth=getattr(ro,"author",None)
-    tuid=getattr(auth,"userId",None) if auth else None
-    tnick=getattr(auth,"nickname",None) if auth else None
-    if not tuid: tuid=(getattr(ro,"userId",None) or getattr(ro,"uid",None))
-    if not tuid: await client.send_message(cid,"⚠️ Could not identify the user.",circ); return
-    if not has_account(tuid): await client.send_message(cid,"❌ That user has no profile.",circ); return
-    add_sorex(tuid,amount); name=accounts[tuid]["name"]
-    await client.send_message(cid,
-        f"💰 Transferred {amount} sorex to *{name}*!\nNew balance: {get_balance(tuid)} sorex",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if uid != Config.SOR_ID:
+            return
+        if await _dedup_command(uid, "/give"):
+            return
+        parts = args.lower().split()
+        if not parts or not parts[0].isdigit():
+            await client.send_message(cid, "Usage: reply to someone and say  /give <amount> sorex", circ)
+            return
+        amount = int(parts[0])
+        ro = (getattr(msg, "replyMessage", None) or getattr(msg, "replyTo", None) or getattr(msg, "reply", None))
+        if not ro:
+            await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
+            return
+        auth = getattr(ro, "author", None)
+        tuid = getattr(auth, "userId", None) if auth else None
+        tnick = getattr(auth, "nickname", None) if auth else None
+        if not tuid:
+            tuid = getattr(ro, "userId", None) or getattr(ro, "uid", None)
+        if not tuid:
+            await client.send_message(cid, "⚠️ Could not identify the user.", circ)
+            return
+        if not has_account(tuid):
+            await client.send_message(cid, "❌ That user has no profile.", circ)
+            return
+        add_sorex(tuid, amount)
+        name = accounts[tuid]["name"]
+        await client.send_message(
+            cid,
+            f"💰 Transferred {amount} sorex to *{name}*!\nNew balance: {get_balance(tuid)} sorex",
+            circ,
+        )
+    except Exception:
+        logger.exception("[cmd_give]")
+
 
 async def _reply_uid_nick(msg):
-    ro=(getattr(msg,"replyMessage",None) or getattr(msg,"replyTo",None) or getattr(msg,"reply",None))
-    if not ro: return None,None
-    auth=getattr(ro,"author",None)
-    uid=getattr(auth,"userId",None) if auth else None
-    nick=getattr(auth,"nickname",None) if auth else None
-    if not uid: uid=(getattr(ro,"userId",None) or getattr(ro,"uid",None))
-    return uid,nick
+    ro = getattr(msg, "replyMessage", None) or getattr(msg, "replyTo", None) or getattr(msg, "reply", None)
+    if not ro:
+        return None, None
+    auth = getattr(ro, "author", None)
+    uid = getattr(auth, "userId", None) if auth else None
+    nick = getattr(auth, "nickname", None) if auth else None
+    if not uid:
+        uid = getattr(ro, "userId", None) or getattr(ro, "uid", None)
+    return uid, nick
+
 
 async def cmd_ban(msg):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if uid!=Config.SOR_ID: return
-    tuid,tnick=await _reply_uid_nick(msg)
-    if not tuid: await client.send_message(cid,"⚠️ Reply to someone's message first.",circ); return
-    if tuid==Config.SOR_ID: await client.send_message(cid,"😅 Can't ban the owner!",circ); return
-    banned[tuid]=tnick or "Unknown"; save_banned()
-    await client.send_message(cid,f"🔨 *{tnick or tuid}* has been banned.",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if uid != Config.SOR_ID:
+            return
+        if await _dedup_command(uid, "/ban"):
+            return
+        tuid, tnick = await _reply_uid_nick(msg)
+        if not tuid:
+            await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
+            return
+        if tuid == Config.SOR_ID:
+            await client.send_message(cid, "😅 Can't ban the owner!", circ)
+            return
+        banned[tuid] = tnick or "Unknown"
+        await save_banned()
+        await client.send_message(cid, f"🔨 *{tnick or tuid}* has been banned.", circ)
+    except Exception:
+        logger.exception("[cmd_ban]")
+
 
 async def cmd_unban(msg):
-    uid=msg.author.userId; cid=msg.chatId; circ=msg.circleId
-    if uid!=Config.SOR_ID: return
-    tuid,tnick=await _reply_uid_nick(msg)
-    if not tuid: await client.send_message(cid,"⚠️ Reply to someone's message first.",circ); return
-    if tuid in banned:
-        nick=banned.pop(tuid); save_banned()
-        await client.send_message(cid,f"✅ *{nick}* has been unbanned.",circ)
-    else: await client.send_message(cid,f"⚠️ {tnick or tuid} is not banned.",circ)
+    try:
+        uid = msg.author.userId
+        cid = msg.chatId
+        circ = msg.circleId
+        if uid != Config.SOR_ID:
+            return
+        if await _dedup_command(uid, "/unban"):
+            return
+        tuid, tnick = await _reply_uid_nick(msg)
+        if not tuid:
+            await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
+            return
+        if tuid in banned:
+            nick = banned.pop(tuid)
+            await save_banned()
+            await client.send_message(cid, f"✅ *{nick}* has been unbanned.", circ)
+        else:
+            await client.send_message(cid, f"⚠️ {tnick or tuid} is not banned.", circ)
+    except Exception:
+        logger.exception("[cmd_unban]")
+
 
 async def cmd_help(msg):
-    cid=msg.chatId; circ=msg.circleId
-    await client.send_message(cid,
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "👤 Profile\n"
-        "/signup  /profile  /view <name>  /balance  /shop\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "🛒 Economy\n"
-        "/buy frame 1  /buy bubble 2  /buy bg 3  /buy colour white\n"
-        "/use frame 1  /use colour white  ← shows card automatically\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📝 Bio\n"
-        "/set bio <text>   /set name <new name>   /remove bio\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎮 Games\n"
-        "Reply to someone:  4 in a row\n"
-        "Or just type:      لعبة برا السالفة   ← open lobby (no reply needed)\n"
-        "انهاء اللعبة  — end game (host only)\n"
-        "━━━━━━━━━━━━━━━━━━━━━",circ)
+    try:
+        cid = msg.chatId
+        circ = msg.circleId
+        await client.send_message(
+            cid,
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "👤 Profile\n"
+            "/signup  /profile  /view <name>  /balance  /shop\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🛒 Economy\n"
+            "/buy frame 1  /buy bubble 2  /buy bg 3  /buy colour white\n"
+            "/use frame 1  /use colour white  ← shows card automatically\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📝 Bio\n"
+            "/set bio <text>   /set name <new name>   /remove bio\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎮 Games\n"
+            "Reply to someone:  4 in a row\n"
+            "Or just type:      لعبة برا السالفة   ← open lobby (no reply needed)\n"
+            "انهاء اللعبة  — end game (host only)\n"
+            "━━━━━━━━━━━━━━━━━━━━━",
+            circ,
+        )
+    except Exception:
+        logger.exception("[cmd_help]")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -854,7 +1308,6 @@ async def cmd_help(msg):
 # ══════════════════════════════════════════════════════════════════════════════
 client = Client(deviceId=Config.DEVICE_ID)
 
-# Economy interface passed into every game plugin
 _economy = {
     "has_account":       has_account,
     "add_sorex":         add_sorex,
@@ -864,15 +1317,14 @@ _economy = {
     "get_account_wins":  lambda uid: accounts.get(uid, {}).get("wins", 0),
 }
 
-# Instantiate all registered game plugins with their shared dependencies
 game_instances = [G(client, Config, _economy) for G in GAME_CLASSES]
 
+
 def _active_game():
-    """Return the first game with an active session, or None."""
     return next((g for g in game_instances if g.is_active), None)
 
+
 def _triggered_game(content):
-    """Return the game whose trigger matches this content, or None."""
     return next((g for g in game_instances if g.is_trigger(content)), None)
 
 
@@ -885,160 +1337,156 @@ async def _self_filter(message: ChatMessage):
         return False
 
 
-@client.event(EventType.ChatMemberJoin)
-async def on_join(message: ChatMessage):
-    """Track joining members silently. No welcome messages are sent."""
-    try:
-        nick = message.author.nickname
-        av = message.author.avatar_url or ""
-        uid = message.author.userId
-        if uid and nick:
-            members[nick.lower()] = {"nickname": nick, "userId": uid, "avatar_url": av}
-            save_members()
-            if uid in accounts and av:
-                accounts[uid]["avatar_url"] = av
-                save_accounts()
-        # WELCOME MESSAGES COMPLETELY DISABLED — bot stays silent on join
-    except Exception as e:
-        logger.exception(f"[on_join] {e}")
-
-
 @client.event(EventType.ChatMessage)
 async def on_message(message: ChatMessage):
     try:
-        # ── Deduplicate by message ID ──────────────────────────────────────
+        # ── Layer 1: Message dedup ────────────────────────────────────────
         if await _dedup_message(message):
             return
 
         content = (message.content or "").strip()
         uid = message.author.userId
         nickname = message.author.nickname
-        av = message.author.avatar_url or ""
+        av = getattr(message.author, "avatar_url", None) or ""
         chat_id = message.chatId
         circle_id = message.circleId
-        msg_id = message.messageId
 
         if not content or chat_id != Config.CHAT_ID:
             return
 
-        # Silently sync avatar
+        # Silently sync avatar (no save — let next explicit save catch it)
         if av and uid in accounts and accounts[uid].get("avatar_url") != av:
             accounts[uid]["avatar_url"] = av
-            save_accounts()
 
         if is_banned(uid):
-            return  # banned users are completely ignored
+            return
 
         cl = content.lower()
 
-        # ── SIGNUP (highest priority) ──────────────────────────────────────
+        # ── SIGNUP ─────────────────────────────────────────────────────────
         if uid in signup_states:
             if await handle_signup_step(message, content):
                 return
 
-        # ── Deduplicate by command cooldown ────────────────────────────────
-        # Extract the base command for cooldown tracking
-        cmd_key = cl.split()[0] if cl.startswith(("/", "yulia ", "y ")) else cl
-        if await _dedup_command(uid, cmd_key):
-            return
+        # ── Layer 2: Command cooldown ─────────────────────────────────────
+        cmd_key = cl.split()[0] if cl.startswith("/") else cl
+        on_cooldown = await _dedup_command(uid, cmd_key)
 
         # ── USER COMMANDS ──────────────────────────────────────────────────
         if cl == "/signup":
             await handle_signup(message)
             return
+
         if cl in ("/profile", "/card"):
+            if on_cooldown:
+                return
             await cmd_profile(message)
             return
+
         if cl.startswith("/view "):
+            if on_cooldown:
+                return
             await cmd_view(message, content[6:].strip())
             return
+
         if cl.startswith("/buy "):
+            if on_cooldown:
+                return
             await cmd_buy(message, content[5:].strip())
             return
+
         if cl.startswith("/use "):
+            if on_cooldown:
+                return
             await cmd_use(message, content[5:].strip())
             return
+
         if cl == "/remove bio":
+            if on_cooldown:
+                return
             await cmd_remove_bio(message)
             return
+
         if cl.startswith("/set bio "):
+            if on_cooldown:
+                return
             await cmd_set_bio(message, content[9:].strip())
             return
+
         if cl.startswith("/set name "):
+            if on_cooldown:
+                return
             await cmd_set_name(message, content[10:].strip())
             return
+
         if cl in ("/balance", "/sorex", "/coins"):
+            if on_cooldown:
+                return
             await cmd_balance(message)
             return
+
         if cl in ("/shop", "/store", "/assets"):
+            if on_cooldown:
+                return
             await cmd_shop(message)
             return
+
         if cl in ("/help", "/commands"):
+            if on_cooldown:
+                return
             await cmd_help(message)
             return
 
         # ── OWNER COMMANDS ─────────────────────────────────────────────────
         if uid == Config.SOR_ID:
             if cl.startswith("/give "):
+                if on_cooldown:
+                    return
                 await cmd_give(message, content[6:].strip())
                 return
             if cl == "/ban":
+                if on_cooldown:
+                    return
                 await cmd_ban(message)
                 return
             if cl == "/unban":
+                if on_cooldown:
+                    return
                 await cmd_unban(message)
                 return
-            if cl == "yulia scan":
-                await scan_members()
-                await client.send_message(chat_id, f"✅ Scan done — {len(members)} members.", circle_id)
-                return
-            for pfx in ("yulia welcome ", "y welcome "):
-                if cl.startswith(pfx):
-                    tname = content[len(pfx):].strip()
-                    m = members.get(tname.lower())
-                    if not m:
-                        await client.send_message(chat_id, f"❌ '{tname}' not found.", circle_id)
-                        return
-                    if m.get("avatar_url") and os.path.exists(Config.WELCOME_BG):
-                        await send_welcome_card(chat_id, circle_id, m["avatar_url"], m["nickname"])
-                    else:
-                        await client.send_message(chat_id, f"⚠️ Cannot send welcome card for '{m['nickname']}' — no avatar or missing background image.", circle_id)
-                    return
 
         # ══ GAME ROUTING ════════════════════════════════════════════════════
         active = _active_game()
 
-        # End-game command
         if content in ("انهاء اللعبة",) or cl == "end game":
             if active:
                 await active.force_end(uid, nickname, chat_id, circle_id)
             return
 
-        # Route to active game first
         if active:
             if await active.handle_message(uid, nickname, content, chat_id, circle_id):
                 return
 
-        # Check for new game trigger
         triggered = _triggered_game(content)
         if triggered:
             if active:
-                await client.send_message(chat_id,
+                await client.send_message(
+                    chat_id,
                     "⚠️ هناك لعبة شغالة بالفعل.\nالمضيف يكتب *انهاء اللعبة* أولاً.",
-                    circle_id, reply_message_id=msg_id)
+                    circle_id,
+                    reply_message_id=message.messageId,
+                )
                 return
 
-            # ── Open-lobby games (no reply needed) ─────────────────────────
             if not getattr(triggered, 'NEEDS_REPLY', True):
                 await triggered.start_challenge(uid, nickname, None, None, chat_id, circle_id)
                 return
 
-            # ── 1v1 games (reply required) ─────────────────────────────────
             ro = (getattr(message, "replyMessage", None)
                   or getattr(message, "replyTo", None)
                   or getattr(message, "reply", None))
             if not ro:
-                return  # silently ignore triggers without a reply target
+                return
 
             auth = getattr(ro, "author", None)
             opp_id = getattr(auth, "userId", None) if auth else None
@@ -1048,7 +1496,7 @@ async def on_message(message: ChatMessage):
                 opp_nick = getattr(ro, "nickname", None)
 
             if not opp_id or opp_id == uid:
-                return  # can't challenge yourself
+                return
 
             await triggered.start_challenge(uid, nickname, opp_id, opp_nick, chat_id, circle_id)
 
@@ -1061,50 +1509,47 @@ async def on_message(message: ChatMessage):
 # ══════════════════════════════════════════════════════════════════════════════
 _stop = False
 
+
 def _shutdown(sig, frame):
     global _stop
     logger.info(f"Signal {sig}")
     _stop = True
+
 
 signal.signal(signal.SIGTERM, _shutdown)
 signal.signal(signal.SIGINT, _shutdown)
 
 
 async def _cleanup_client():
-    """Clean up client state before reconnecting."""
-    try:
-        if hasattr(client, 'disconnect') and callable(client.disconnect):
-            await client.disconnect()
-    except Exception:
-        pass
-    try:
-        if hasattr(client, 'close') and callable(client.close):
-            await client.close()
-    except Exception:
-        pass
+    for attr in ('disconnect', 'close', 'stop'):
+        try:
+            fn = getattr(client, attr, None)
+            if fn and callable(fn):
+                await fn()
+        except Exception:
+            pass
     await asyncio.sleep(1)
 
 
-async def _run_session():
-    logger.info("Logging in…")
-    await client.login(Config.EMAIL, Config.PASSWORD)
-    logger.success("✅ Logged in — Profile Bot is alive!")
-    asyncio.create_task(scan_members())
-    await client.socket_wait()
+def _jittered_backoff(base, attempt):
+    delay = min(base * (2 ** attempt), Config.RESTART_BACKOFF_MAX)
+    jitter = delay * 0.3 * (2 * __import__('random').random() - 1)
+    return max(Config.RESTART_BACKOFF_MIN, delay + jitter)
 
 
 async def main():
     global _stop
-    # Pull latest data from GitHub first, fall back to local files
     await load_all()
-    logger.info(f"Data loaded — accounts:{len(accounts)} banned:{len(banned)} members:{len(members)}")
 
     backoff = Config.RESTART_BACKOFF_MIN
     try:
         while not _stop:
             start = time.time()
             try:
-                await _run_session()
+                logger.info("Logging in…")
+                await client.login(Config.EMAIL, Config.PASSWORD)
+                logger.success("✅ Logged in — Profile Bot is alive!")
+                await client.socket_wait()
                 logger.warning("[main] session ended")
             except (KeyboardInterrupt, SystemExit):
                 raise
@@ -1113,16 +1558,18 @@ async def main():
             if _stop:
                 break
             await _cleanup_client()
-            if time.time() - start > 300:
+            session_duration = time.time() - start
+            if session_duration > 300:
                 backoff = Config.RESTART_BACKOFF_MIN
             else:
-                backoff = min(backoff * 2, Config.RESTART_BACKOFF_MAX)
-            logger.info(f"[main] restart in {backoff}s…")
+                backoff = _jittered_backoff(Config.RESTART_BACKOFF_MIN, 0 if backoff <= Config.RESTART_BACKOFF_MIN else 1)
+            logger.info(f"[main] restart in {backoff:.1f}s…")
             slept = 0.0
             while slept < backoff and not _stop:
                 await asyncio.sleep(1.0)
                 slept += 1.0
     finally:
+        _save_dedup()
         await close_http()
         await close_github()
 
