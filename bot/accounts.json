@@ -112,5 +112,24 @@
     "active_colour": "black",
     "game_stats": {},
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoj9ni528r3c0jc1g7f7862a/0x0/media.gif?wh=undefinedxundefined"
+  },
+  "cmo4l5wuf0r8j0ict4mfr1cnq": {
+    "name": "Kai",
+    "bio": "ninininini",
+    "bio_removed": false,
+    "games_played": 0,
+    "wins": 0,
+    "wealth": 0,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault"
+    ],
+    "active_bg": "bgdefault",
+    "active_frame": "framedefault",
+    "active_bubble": "bubbledefault",
+    "active_colour": "black",
+    "game_stats": {},
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoiw8iw57hd80iegbuqz2gov/0x0/media.jpg?wh=undefinedxundefined"
   }
 }
