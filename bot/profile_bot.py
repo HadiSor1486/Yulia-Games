@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════╗
-║                     SOREX PROFILE BOT  — Kyodo                          ║
+║                     SOREX PROFILE BOT  —  Kyodo                         ║
 ║                                                                          ║
 ║  USER COMMANDS                                                           ║
 ║   /signup          — create your profile (step-by-step)                 ║
@@ -25,7 +25,6 @@
 ║   /unban           — reply to unban a user                              ║
 ║   yulia scan       — refresh member list                                ║
 ║   yulia welcome <name> — manual welcome card                            ║
-║                                                                          ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -56,6 +55,7 @@ from .assets import (
     get_price, get_reward,
 )
 from .games import GAME_CLASSES   # all registered game plugins
+from .github_storage import pull_all, schedule_push, close as close_github  # persistent storage
 
 with suppress(ImportError):
     import uvloop
@@ -242,6 +242,7 @@ def json_write(path: str, data: Any):
         with suppress(FileNotFoundError): os.remove(tmp)
         raise
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 6.  DEDUPLICATION & COOLDOWN  (prevents duplicate messages/commands)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -294,23 +295,62 @@ def _default_account(name, bio, avatar_url=""):
         "game_stats": {}, "avatar_url": avatar_url,
     }
 
-def load_all():
+# ── GitHub-backed load/save ──────────────────────────────────────────────────
+
+async def load_all():
+    """Pull latest from GitHub first, fall back to local files."""
     global accounts, banned, members
-    accounts = json_read(Config.ACCOUNTS_FILE, {})
-    banned   = json_read(Config.BANNED_FILE,   {})
-    members  = json_read(Config.MEMBERS_FILE,  {})
+
+    # Try GitHub first
+    github_data = await pull_all()
+
+    # Accounts
+    acc = github_data.get("accounts.json")
+    if acc is not None:
+        accounts = acc
+        json_write(Config.ACCOUNTS_FILE, accounts)
+    else:
+        accounts = json_read(Config.ACCOUNTS_FILE, {})
+
+    # Banned
+    ban = github_data.get("banned.json")
+    if ban is not None:
+        banned = ban
+        json_write(Config.BANNED_FILE, banned)
+    else:
+        banned = json_read(Config.BANNED_FILE, {})
+
+    # Members
+    mem = github_data.get("members.json")
+    if mem is not None:
+        members = mem
+        json_write(Config.MEMBERS_FILE, members)
+    else:
+        members = json_read(Config.MEMBERS_FILE, {})
 
 def save_accounts():
-    try: json_write(Config.ACCOUNTS_FILE, accounts)
-    except Exception as e: logger.exception(f"[accounts] {e}")
+    """Save locally + queue GitHub sync."""
+    try:
+        json_write(Config.ACCOUNTS_FILE, accounts)
+        schedule_push("accounts.json", accounts)
+    except Exception as e:
+        logger.exception(f"[accounts] {e}")
 
 def save_banned():
-    try: json_write(Config.BANNED_FILE, banned)
-    except Exception as e: logger.exception(f"[banned] {e}")
+    """Save locally + queue GitHub sync."""
+    try:
+        json_write(Config.BANNED_FILE, banned)
+        schedule_push("banned.json", banned)
+    except Exception as e:
+        logger.exception(f"[banned] {e}")
 
 def save_members():
-    try: json_write(Config.MEMBERS_FILE, members)
-    except Exception as e: logger.exception(f"[members] {e}")
+    """Save locally + queue GitHub sync."""
+    try:
+        json_write(Config.MEMBERS_FILE, members)
+        schedule_push("members.json", members)
+    except Exception as e:
+        logger.exception(f"[members] {e}")
 
 async def scan_members():
     found={}; pt=None
@@ -998,112 +1038,79 @@ async def on_message(message: ChatMessage):
                   or getattr(message, "replyTo", None)
                   or getattr(message, "reply", None))
             if not ro:
-                await client.send_message(chat_id, "⚠️ رد على رسالة الشخص اللي تبي تتحداه.",
-                    circle_id, reply_message_id=msg_id)
-                return
+                return  # silently ignore triggers without a reply target
+
             auth = getattr(ro, "author", None)
-            ouid = getattr(auth, "userId", None) if auth else None
-            onick = getattr(auth, "nickname", None) if auth else None
-            if not ouid:
-                ouid = (getattr(ro, "userId", None) or getattr(ro, "uid", None))
-            if not ouid:
-                await client.send_message(chat_id, "⚠️ ما قدرت أعرف اللاعب الثاني.",
-                    circle_id, reply_message_id=msg_id)
-                return
-            if ouid == uid:
-                await client.send_message(chat_id, "⚠️ ما تقدر تتحدى نفسك! 😅",
-                    circle_id, reply_message_id=msg_id)
-                return
-            if ouid == client.userId:
-                await client.send_message(chat_id, "⚠️ تحدى لاعب حقيقي مو أنا.",
-                    circle_id, reply_message_id=msg_id)
-                return
-            if not onick:
-                onick = next((v["nickname"] for v in members.values() if v["userId"] == ouid), None) or "اللاعب 2"
-            await triggered.start_challenge(uid, nickname, ouid, onick, chat_id, circle_id)
+            opp_id = getattr(auth, "userId", None) if auth else None
+            opp_nick = getattr(auth, "nickname", None) if auth else None
+            if not opp_id:
+                opp_id = getattr(ro, "userId", None) or getattr(ro, "uid", None)
+                opp_nick = getattr(ro, "nickname", None)
 
-    except Exception as e:
-        logger.exception(f"[on_message] {e}")
+            if not opp_id or opp_id == uid:
+                return  # can't challenge yourself
+
+            await triggered.start_challenge(uid, nickname, opp_id, opp_nick, chat_id, circle_id)
+
+    except Exception:
+        logger.exception("[on_message] unhandled")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 17.  MAIN
+# 17.  STARTUP / SHUTDOWN / RESTART LOOP
 # ══════════════════════════════════════════════════════════════════════════════
-_stop = False
+_restart_event = asyncio.Event()
 
-def _shutdown(sig, frame):
-    global _stop
-    logger.info(f"Signal {sig}")
-    _stop = True
-
-signal.signal(signal.SIGTERM, _shutdown)
-signal.signal(signal.SIGINT, _shutdown)
+async def _graceful_shutdown(sig=None):
+    logger.info("Shutting down…")
+    await close_http()
+    await close_github()   # flush any pending pushes
+    _restart_event.set()
 
 
-async def _cleanup_client():
-    """Clean up client state before reconnecting."""
-    try:
-        # Try to close any existing socket connection
-        if hasattr(client, 'disconnect') and callable(client.disconnect):
-            await client.disconnect()
-    except Exception:
-        pass
-    try:
-        if hasattr(client, 'close') and callable(client.close):
-            await client.close()
-    except Exception:
-        pass
-    # Small delay to let the OS clean up sockets
-    await asyncio.sleep(1)
-
-
-async def _run_session():
-    logger.info("Logging in…")
-    await client.login(Config.EMAIL, Config.PASSWORD)
-    logger.success("✅ Logged in — Profile Bot is alive!")
-    asyncio.create_task(scan_members())
-    await client.socket_wait()
-
-
-async def main():
-    global _stop
-    load_all()
+async def main_loop():
+    """Login, load data, start client, then block until a restart is requested."""
     backoff = Config.RESTART_BACKOFF_MIN
-    try:
-        while not _stop:
-            start = time.time()
-            try:
-                await _run_session()
-                logger.warning("[main] session ended")
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except Exception as e:
-                logger.exception(f"[main] {e}")
-            if _stop:
-                break
-            # Clean up before reconnecting to prevent duplicate listeners
-            await _cleanup_client()
-            # Backoff: reset if session lasted >5 min, otherwise exponential
-            if time.time() - start > 300:
-                backoff = Config.RESTART_BACKOFF_MIN
-            else:
-                backoff = min(backoff * 2, Config.RESTART_BACKOFF_MAX)
-            logger.info(f"[main] restart in {backoff}s…")
-            slept = 0.0
-            while slept < backoff and not _stop:
-                await asyncio.sleep(1.0)
-                slept += 1.0
-    finally:
-        await close_http()
+
+    while True:
+        try:
+            # Pull latest data from GitHub first, fall back to local files
+            await load_all()
+            logger.info(f"Data loaded — accounts:{len(accounts)} banned:{len(banned)} members:{len(members)}")
+
+            await client.login(Config.EMAIL, Config.PASSWORD)
+            logger.info(f"Logged in as {client.userId}")
+
+            await client.connect()
+            logger.info("Connected to Kyodo ✓")
+
+            _restart_event.clear()
+            await _restart_event.wait()  # block here until shutdown signal
+
+        except Exception as e:
+            logger.exception(f"[main_loop] {e}")
+
+        logger.info(f"Restarting in {backoff}s …")
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 2, Config.RESTART_BACKOFF_MAX)
 
 
 if __name__ == "__main__":
-    while True:
-        keep_alive()
-        try:
-            asyncio.run(main())
-        except (KeyboardInterrupt, SystemExit):
-            break
-        except Exception as e:
-            logger.error(f"[top] {e}")
-            time.sleep(5)
+    keep_alive()
+
+    # Handle SIGTERM (sent by Render on shutdown / redeploy)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    for s in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(s, lambda: asyncio.create_task(_graceful_shutdown()))
+
+    try:
+        loop.run_until_complete(main_loop())
+    except KeyboardInterrupt:
+        loop.run_until_complete(_graceful_shutdown())
+    finally:
+        with suppress(Exception):
+            loop.run_until_complete(close_github())
+        with suppress(Exception):
+            loop.run_until_complete(close_http())
+        loop.close()
