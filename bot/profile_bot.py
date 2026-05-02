@@ -367,8 +367,8 @@ def _default_account(name: str, bio: str, nickname: str = "", avatar_url: str = 
     captured once at signup and stored permanently for /view lookups.
     """
     return {
-        "name": name,                   # chosen profile name
-        "nickname": nickname,           # normalized Kyodo name (captured at signup)
+        "name": name,
+        "nickname": nickname,
         "bio": bio,
         "bio_removed": False,
         "games_played": 0,
@@ -910,8 +910,6 @@ async def cmd_profile(msg):
         if not has_account(uid):
             await client.send_message(cid, "❌ No profile yet. Use /signup!", circ)
             return
-        if await _dedup_command(uid, "/profile"):
-            return
         await send_profile_card(uid, cid, circ)
     except Exception:
         logger.exception("[cmd_profile]")
@@ -922,8 +920,6 @@ async def cmd_view(msg, target_name):
     try:
         cid = msg.chatId
         circ = msg.circleId
-        if await _dedup_command(msg.author.userId, "/view"):
-            return
 
         uid = resolve_user(target_name)
         if not uid:
@@ -941,8 +937,6 @@ async def cmd_buy(msg, args):
         circ = msg.circleId
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        if await _dedup_command(uid, "/buy"):
             return
         parts = args.split()
         if len(parts) < 2:
@@ -990,8 +984,6 @@ async def cmd_use(msg, args):
         circ = msg.circleId
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        if await _dedup_command(uid, "/use"):
             return
         parts = args.split()
         if len(parts) < 2:
@@ -1055,8 +1047,6 @@ async def cmd_remove_bio(msg):
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
             return
-        if await _dedup_command(uid, "/remove bio"):
-            return
         accounts[uid]["bio_removed"] = True
         accounts[uid]["bio"] = ""
         await save_accounts()
@@ -1076,8 +1066,6 @@ async def cmd_set_bio(msg, bio):
         circ = msg.circleId
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        if await _dedup_command(uid, "/set bio"):
             return
         if len(bio) > 100:
             await client.send_message(cid, f"⚠️ Too long ({len(bio)}). Max 100.", circ)
@@ -1101,8 +1089,6 @@ async def cmd_set_name(msg, new_name):
         circ = msg.circleId
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        if await _dedup_command(uid, "/set name"):
             return
         new_name = new_name.strip()
         if not new_name:
@@ -1135,8 +1121,6 @@ async def cmd_balance(msg):
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
             return
-        if await _dedup_command(uid, "/balance"):
-            return
         u = accounts[uid]
         rank = get_rank(u.get("wins", 0))
         rs = f"  |  Rank: {rank}" if rank else ""
@@ -1155,8 +1139,6 @@ async def cmd_shop(msg):
         cid = msg.chatId
         circ = msg.circleId
         uid = msg.author.userId
-        if await _dedup_command(uid, "/shop"):
-            return
         lines = ["🛒 *Asset Shop*", "━━━━━━━━━━━━━━━━━━"]
         cats = {
             "Backgrounds": [k for k in ASSETS if k.startswith("bg") and "default" not in k],
@@ -1183,8 +1165,6 @@ async def cmd_give(msg, args):
         cid = msg.chatId
         circ = msg.circleId
         if uid != Config.SOR_ID:
-            return
-        if await _dedup_command(uid, "/give"):
             return
         parts = args.lower().split()
         if not parts or not parts[0].isdigit():
@@ -1236,8 +1216,6 @@ async def cmd_ban(msg):
         circ = msg.circleId
         if uid != Config.SOR_ID:
             return
-        if await _dedup_command(uid, "/ban"):
-            return
         tuid, tnick = await _reply_uid_nick(msg)
         if not tuid:
             await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
@@ -1258,8 +1236,6 @@ async def cmd_unban(msg):
         cid = msg.chatId
         circ = msg.circleId
         if uid != Config.SOR_ID:
-            return
-        if await _dedup_command(uid, "/unban"):
             return
         tuid, tnick = await _reply_uid_nick(msg)
         if not tuid:
@@ -1354,7 +1330,7 @@ async def on_message(message: ChatMessage):
         if not content or chat_id != Config.CHAT_ID:
             return
 
-        # Silently sync avatar (no save — let next explicit save catch it)
+        # Silently sync avatar
         if av and uid in accounts and accounts[uid].get("avatar_url") != av:
             accounts[uid]["avatar_url"] = av
 
@@ -1368,7 +1344,7 @@ async def on_message(message: ChatMessage):
             if await handle_signup_step(message, content):
                 return
 
-        # ── Layer 2: Command cooldown ─────────────────────────────────────
+        # ── Layer 2: Command cooldown (ONE check, guards all commands) ────
         cmd_key = cl.split()[0] if cl.startswith("/") else cl
         on_cooldown = await _dedup_command(uid, cmd_key)
 
