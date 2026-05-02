@@ -3,9 +3,9 @@
     "name": "Sor",
     "bio": "يويلي عليكم",
     "bio_removed": false,
-    "games_played": 6,
-    "wins": 3,
-    "wealth": 9926,
+    "games_played": 7,
+    "wins": 4,
+    "wealth": 9931,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -25,8 +25,8 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 4,
-        "wins": 2
+        "plays": 5,
+        "wins": 3
       },
       "bara alsalfa": {
         "plays": 2,
@@ -39,7 +39,7 @@
     "name": "Pnl",
     "bio": "Free Palestine",
     "bio_removed": false,
-    "games_played": 2,
+    "games_played": 3,
     "wins": 2,
     "wealth": 70,
     "owned_assets": [
@@ -60,7 +60,7 @@
     "active_colour": "white",
     "game_stats": {
       "4 in a row": {
-        "plays": 2,
+        "plays": 3,
         "wins": 2
       }
     },
