@@ -191,5 +191,25 @@
     "active_colour": "black",
     "game_stats": {},
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmonifdg50f7z0id8ca8d47o8/0x0/media.jpg?wh=undefinedxundefined"
+  },
+  "cmij2ztoa0818oi3ddh29ijv0": {
+    "name": "ذلكم الرجل",
+    "nickname": "ذلكم الرجل",
+    "bio": "Mechanical Attention",
+    "bio_removed": false,
+    "games_played": 0,
+    "wins": 0,
+    "wealth": 0,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault"
+    ],
+    "active_bg": "bgdefault",
+    "active_frame": "framedefault",
+    "active_bubble": "bubbledefault",
+    "active_colour": "black",
+    "game_stats": {},
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoj6lh5o1zpc0igj951yav35/0x0/media.jpg?wh=undefinedxundefined"
   }
 }
