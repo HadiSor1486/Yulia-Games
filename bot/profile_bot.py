@@ -127,6 +127,12 @@ logger.add(
 # ══════════════════════════════════════════════════════════════════════════════
 # 3.  ARABIC TEXT RESHAPING  (no external deps)
 # ══════════════════════════════════════════════════════════════════════════════
+try:
+    from PIL import features as _pil_features
+    _RAQM = _pil_features.check("raqm")
+except Exception:
+    _RAQM = False
+
 _AR = {
     0x0621:('\u0621','\u0621','\u0621','\u0621'),
     0x0622:('\u0622','\uFE82',None,None),0x0623:('\u0623','\uFE84',None,None),
@@ -187,7 +193,12 @@ def reshape_arabic(text):
         m.append(shaped[j]); j+=1
     m.reverse(); return "".join(m)
 
-def prepare_text(t): return reshape_arabic(t) if is_arabic(t) else t
+def prepare_text(t):
+    if not is_arabic(t):
+        return t
+    if _RAQM:
+        return t  # libraqm handles Arabic shaping & RTL automatically
+    return reshape_arabic(t)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
