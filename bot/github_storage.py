@@ -106,15 +106,12 @@ async def _github_api(method: str, path: str, **kwargs) -> dict | None:
             resp = await client.request(method, url, **kwargs)
             if resp.status_code in (200, 201):
                 return resp.json()
-            # 409 = conflict (stale SHA) — let caller handle with retry
             if resp.status_code == 409:
                 logger.warning(f"[github] {method} {path} → 409 conflict")
                 return {"__error_409": True, "raw": resp.text[:300]}
-            # 404 = file doesn't exist yet
             if resp.status_code == 404:
                 logger.debug(f"[github] {method} {path} → 404")
                 return None
-            # Rate limit
             if resp.status_code == 403 and "rate limit" in resp.text.lower():
                 reset_at = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
                 wait = max(reset_at - int(time.time()), 10)
@@ -185,7 +182,6 @@ async def _do_push_with_retry(filename: str, data: dict | list) -> bool:
 
     try:
         for attempt in range(_MAX_RETRIES):
-            # Always refresh SHA before pushing
             sha = await _fetch_sha(filename)
 
             path = _github_path(filename)
@@ -201,13 +197,11 @@ async def _do_push_with_retry(filename: str, data: dict | list) -> bool:
 
             result = await _github_api("PUT", f"/contents/{path}", json=payload)
 
-            # Success
             if result and isinstance(result, dict) and result.get("content", {}).get("sha"):
                 _file_shas[filename] = result["content"]["sha"]
                 logger.info(f"[github] synced {filename}")
                 return True
 
-            # 409 conflict — merge and retry
             if result and isinstance(result, dict) and result.get("__error_409"):
                 logger.warning(f"[github] 409 on {filename}, attempt {attempt + 1}/{_MAX_RETRIES} — merging…")
                 remote_data = await fetch_from_github(filename)
@@ -219,7 +213,6 @@ async def _do_push_with_retry(filename: str, data: dict | list) -> bool:
                     await asyncio.sleep(_jittered_delay(attempt))
                 continue
 
-            # Other failure — retry with backoff
             if attempt < _MAX_RETRIES - 1:
                 await asyncio.sleep(_jittered_delay(attempt))
 
