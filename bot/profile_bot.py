@@ -1081,7 +1081,7 @@ async def main_loop():
             await client.login(Config.EMAIL, Config.PASSWORD)
             logger.info(f"Logged in as {client.userId}")
 
-            await client.connect()
+            await client.reconnect()
             logger.info("Connected to Kyodo ✓")
 
             _restart_event.clear()
