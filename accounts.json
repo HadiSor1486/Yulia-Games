@@ -1,0 +1,116 @@
+{
+  "cmgxsk2b30nalpx3ffm07h9i9": {
+    "name": "Sor",
+    "bio": "شو كانت حلوي الليالي",
+    "bio_removed": false,
+    "games_played": 6,
+    "wins": 3,
+    "wealth": 9926,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault",
+      "frame1",
+      "bg1",
+      "bubble1",
+      "bg2",
+      "bg3",
+      "bg4",
+      "bubble2",
+      "bubble3"
+    ],
+    "active_bg": "bg1",
+    "active_frame": "frame1",
+    "active_bubble": "bubble1",
+    "active_colour": "black",
+    "game_stats": {
+      "4 in a row": {
+        "plays": 4,
+        "wins": 2
+      },
+      "bara alsalfa": {
+        "plays": 2,
+        "wins": 1
+      }
+    },
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoctufyx1bha0ig6e0oqcjjv/0x0/media.jpg?wh=undefinedxundefined"
+  },
+  "cmnfvboez001h0iec4yr83mdl": {
+    "name": "Pnl",
+    "bio": "Free Palestine",
+    "bio_removed": false,
+    "games_played": 2,
+    "wins": 2,
+    "wealth": 70,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault",
+      "bg3",
+      "frame2",
+      "bubble2",
+      "bg4",
+      "bg2",
+      "bubble3",
+      "white"
+    ],
+    "active_bg": "bg2",
+    "active_frame": "frame2",
+    "active_bubble": "bubble3",
+    "active_colour": "white",
+    "game_stats": {
+      "4 in a row": {
+        "plays": 2,
+        "wins": 2
+      }
+    },
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmomtrcgoi6os0iek55ek4khl/0x0/media.jpg?wh=undefinedxundefined"
+  },
+  "cmnsysvfo01cg0hbw260b2885": {
+    "name": "Yan",
+    "bio": "watch me cook",
+    "bio_removed": false,
+    "games_played": 3,
+    "wins": 1,
+    "wealth": 110,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault",
+      "bg4",
+      "bubble2",
+      "frame2"
+    ],
+    "active_bg": "bg4",
+    "active_frame": "frame2",
+    "active_bubble": "bubble2",
+    "active_colour": "black",
+    "game_stats": {
+      "4 in a row": {
+        "plays": 3,
+        "wins": 1
+      }
+    },
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmompcgkqj48h0ieg6dft2idi/0x0/media.jpg?wh=undefinedxundefined"
+  },
+  "cmo6y9mrc2pom0ibvem6w8ryw": {
+    "name": "iiussef",
+    "bio": "I AM DRACULA'S SON !!!",
+    "bio_removed": false,
+    "games_played": 0,
+    "wins": 0,
+    "wealth": 60,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault",
+      "bg2"
+    ],
+    "active_bg": "bg2",
+    "active_frame": "framedefault",
+    "active_bubble": "bubbledefault",
+    "active_colour": "black",
+    "game_stats": {},
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoj9ni528r3c0jc1g7f7862a/0x0/media.gif?wh=undefinedxundefined"
+  }
+}
