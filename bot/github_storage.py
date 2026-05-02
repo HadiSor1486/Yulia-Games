@@ -5,9 +5,12 @@
 #  Falls back to local disk if GitHub is unreachable.
 #
 #  ENV VARS REQUIRED:
-#    GITHUB_TOKEN  —  fine-grained personal access token with Contents:RW
-#    GITHUB_USER   —  your GitHub username  (default: HadiSor1486)
-#    GITHUB_REPO   —  the repo name          (default: Yulia-Games)
+#    GITHUB_TOKEN      —  fine-grained personal access token with Contents:RW
+#    GITHUB_USER       —  your GitHub username  (default: HadiSor1486)
+#    GITHUB_REPO       —  the repo name          (default: Yulia-Games)
+#    GITHUB_JSON_PATH  —  subfolder in repo where JSON files live
+#                          e.g. "bot" if files are at bot/accounts.json
+#                          (default: empty → root of repo)
 # ═══════════════════════════════════════════════════════════════════════════
 from __future__ import annotations
 
@@ -27,6 +30,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_USER  = os.getenv("GITHUB_USER",  "HadiSor1486")
 GITHUB_REPO  = os.getenv("GITHUB_REPO",  "Yulia-Games")
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
+GITHUB_JSON_PATH = os.getenv("GITHUB_JSON_PATH", "").strip("/")
 
 API_BASE = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}"
 FILES_TO_SYNC = ("accounts.json", "banned.json", "members.json")
@@ -43,6 +47,13 @@ _file_shas: dict[str, str | None] = {
     "banned.json":   None,
     "members.json":  None,
 }
+
+
+def _github_path(filename: str) -> str:
+    """Return the path inside the repo for *filename*."""
+    if GITHUB_JSON_PATH:
+        return f"{GITHUB_JSON_PATH}/{filename}"
+    return filename
 
 
 def _http_client() -> httpx.AsyncClient:
@@ -87,7 +98,8 @@ async def fetch_from_github(filename: str) -> dict | list | None:
     if filename not in FILES_TO_SYNC:
         return None
 
-    data = await _github_api("GET", f"/contents/{filename}?ref={GITHUB_BRANCH}")
+    path = _github_path(filename)
+    data = await _github_api("GET", f"/contents/{path}?ref={GITHUB_BRANCH}")
     if data is None:
         return None
 
@@ -113,10 +125,11 @@ async def push_to_github(filename: str, data: dict | list) -> bool:
         return False
 
     sha = _file_shas.get(filename)
+    path = _github_path(filename)
 
     # If we don't have a SHA yet, try to fetch it first
     if not sha:
-        info = await _github_api("GET", f"/contents/{filename}?ref={GITHUB_BRANCH}")
+        info = await _github_api("GET", f"/contents/{path}?ref={GITHUB_BRANCH}")
         if info:
             sha = info.get("sha")
             _file_shas[filename] = sha
@@ -130,7 +143,7 @@ async def push_to_github(filename: str, data: dict | list) -> bool:
     if sha:
         payload["sha"] = sha
 
-    result = await _github_api("PUT", f"/contents/{filename}", json=payload)
+    result = await _github_api("PUT", f"/contents/{path}", json=payload)
     if result and result.get("content", {}).get("sha"):
         _file_shas[filename] = result["content"]["sha"]
         logger.debug(f"[github] pushed {filename}")
@@ -197,3 +210,4 @@ async def close():
     global _http
     if _http and not _http.is_closed:
         await _http.aclose()
+
