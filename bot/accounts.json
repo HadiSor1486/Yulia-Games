@@ -214,5 +214,25 @@
     "active_colour": "black",
     "game_stats": {},
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoj6lh5o1zpc0igj951yav35/0x0/media.jpg?wh=undefinedxundefined"
+  },
+  "cmoeee2vc6cpb0iclhnrsfptz": {
+    "name": "احمد",
+    "nickname": "︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎︎‌",
+    "bio": "الحمدلله",
+    "bio_removed": false,
+    "games_played": 0,
+    "wins": 0,
+    "wealth": 0,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault"
+    ],
+    "active_bg": "bgdefault",
+    "active_frame": "framedefault",
+    "active_bubble": "bubbledefault",
+    "active_colour": "black",
+    "game_stats": {},
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoowh0200w5v0i9j8mpc9aq5/0x0/media.jpg?wh=undefinedxundefined"
   }
 }
