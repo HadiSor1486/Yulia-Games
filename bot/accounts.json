@@ -22,7 +22,7 @@
       "bg5",
       "bg7"
     ],
-    "active_bg": "bg5",
+    "active_bg": "bg1",
     "active_frame": "frame1",
     "active_bubble": "bubble2",
     "active_colour": "black",
