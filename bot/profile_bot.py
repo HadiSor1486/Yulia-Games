@@ -91,8 +91,14 @@ class Config:
     WELCOME_BACKGROUND       = _p("shbg.jpg")
     WELCOME_PROFILE_SIZE     = 303
     WELCOME_PROFILE_POSITION = (389, 291)
-    WELCOME_NICKNAME_Y       = 650
-    WELCOME_NICKNAME_SIZE    = 70
+
+    # Name text position — tested values for gothic gray style
+    WELCOME_NAME_X           = 540
+    WELCOME_NAME_Y           = 950
+    WELCOME_NAME_SIZE        = 55
+    WELCOME_NAME_FILL        = (192, 192, 192, 255)   # silver-gray
+    WELCOME_NAME_SHADOW      = (40, 40, 40, 180)      # dark shadow
+    WELCOME_NAME_SHADOW_OFF  = 2                      # px offset
 
     ACCOUNTS_FILE = _p("accounts.json")
     BANNED_FILE   = _p("banned.json")
@@ -829,11 +835,40 @@ async def send_profile_card(uid, chat_id, circle_id):
 async def create_welcome_image(profile_img: Image.Image, nickname: str):
     try:
         base = Image.open(Config.WELCOME_BACKGROUND).convert("RGBA")
+
+        # ── Paste profile picture ──
         pfp = _circular(profile_img.copy(), Config.WELCOME_PROFILE_SIZE)
         x, y = Config.WELCOME_PROFILE_POSITION
         tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
         tmp.paste(pfp, (x, y), pfp)
         base = Image.alpha_composite(base, tmp)
+
+        # ── Draw nickname (gothic gray style, perfectly centered) ──
+        prepared = prepare_text(nickname)
+        if prepared:
+            font = _font(nickname, Config.WELCOME_NAME_SIZE)
+            draw = ImageDraw.Draw(base)
+
+            # Measure actual ink bounding box
+            bb = font.getbbox(prepared)
+            ink_left, ink_top, ink_right, ink_bottom = bb
+            text_width = ink_right - ink_left
+            text_height = ink_bottom - ink_top
+
+            # Center the INK at the configured point
+            draw_x = Config.WELCOME_NAME_X - text_width // 2 - ink_left
+            draw_y = Config.WELCOME_NAME_Y - text_height // 2 - ink_top
+
+            # Gothic gray: subtle dark drop shadow then silver-gray text
+            off = Config.WELCOME_NAME_SHADOW_OFF
+            draw.text(
+                (draw_x + off, draw_y + off),
+                prepared, font=font, fill=Config.WELCOME_NAME_SHADOW,
+            )
+            draw.text(
+                (draw_x, draw_y),
+                prepared, font=font, fill=Config.WELCOME_NAME_FILL,
+            )
 
         out = BytesIO()
         base.convert("RGB").save(out, "JPEG", quality=Config.OUTPUT_QUALITY)
