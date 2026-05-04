@@ -139,6 +139,133 @@ logger.add(
 # 3.  TEXT NORMALIZATION  (fancy fonts, Arabic, Unicode variations)
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Fancy-font → plain ASCII mapping tables ─────────────────────────────────
+
+_FANCY_MAP: dict[int, str] = {}
+
+# Mathematical Alphanumeric Symbols block (U+1D400–U+1D7FF)
+# Bold A-Z        U+1D400-U+1D419  → A-Z
+_FANCY_MAP.update({0x1D400 + i: chr(0x41 + i) for i in range(26)})
+# Bold a-z        U+1D41A-U+1D433  → a-z
+_FANCY_MAP.update({0x1D41A + i: chr(0x61 + i) for i in range(26)})
+# Italic A-Z      U+1D434-U+1D44D  → A-Z
+_FANCY_MAP.update({0x1D434 + i: chr(0x41 + i) for i in range(26)})
+# Italic a-z      U+1D44E-U+1D467  → a-z
+_FANCY_MAP.update({0x1D44E + i: chr(0x61 + i) for i in range(26)})
+# Bold Italic A-Z U+1D468-U+1D481  → A-Z
+_FANCY_MAP.update({0x1D468 + i: chr(0x41 + i) for i in range(26)})
+# Bold Italic a-z U+1D482-U+1D49B  → a-z
+_FANCY_MAP.update({0x1D482 + i: chr(0x61 + i) for i in range(26)})
+# Script A-Z      U+1D49C-U+1D4B5  → A-Z  (with a gap at U+1D4A2)
+for i in range(26):
+    cp = 0x1D49C + i
+    if cp >= 0x1D4A2:  # skip the hole at U+1D4A2 (Script B)
+        cp += 1
+    _FANCY_MAP[cp] = chr(0x41 + i)
+# Script a-z      U+1D4B6-U+1D4CF  → a-z
+_FANCY_MAP.update({0x1D4B6 + i: chr(0x61 + i) for i in range(26)})
+# Bold Script A-Z U+1D4D0-U+1D4E9  → A-Z
+_FANCY_MAP.update({0x1D4D0 + i: chr(0x41 + i) for i in range(26)})
+# Bold Script a-z U+1D4EA-U+1D503  → a-z
+_FANCY_MAP.update({0x1D4EA + i: chr(0x61 + i) for i in range(26)})
+# Fraktur A-Z     U+1D504-U+1D51D  → A-Z
+_FANCY_MAP.update({0x1D504 + i: chr(0x41 + i) for i in range(26)})
+# Fraktur a-z     U+1D51E-U+1D537  → a-z
+_FANCY_MAP.update({0x1D51E + i: chr(0x61 + i) for i in range(26)})
+# Double-struck A-Z U+1D538-U+1D551 → A-Z
+_FANCY_MAP.update({0x1D538 + i: chr(0x41 + i) for i in range(26)})
+# Double-struck a-z U+1D552-U+1D56B → a-z
+_FANCY_MAP.update({0x1D552 + i: chr(0x61 + i) for i in range(26)})
+# Bold Fraktur A-Z  U+1D56C-U+1D585 → A-Z
+_FANCY_MAP.update({0x1D56C + i: chr(0x41 + i) for i in range(26)})
+# Bold Fraktur a-z  U+1D586-U+1D59F → a-z
+_FANCY_MAP.update({0x1D586 + i: chr(0x61 + i) for i in range(26)})
+# Sans A-Z        U+1D5A0-U+1D5B9  → A-Z
+_FANCY_MAP.update({0x1D5A0 + i: chr(0x41 + i) for i in range(26)})
+# Sans a-z        U+1D5BA-U+1D5D3  → a-z
+_FANCY_MAP.update({0x1D5BA + i: chr(0x61 + i) for i in range(26)})
+# Sans Bold A-Z   U+1D5D4-U+1D5ED  → A-Z
+_FANCY_MAP.update({0x1D5D4 + i: chr(0x41 + i) for i in range(26)})
+# Sans Bold a-z   U+1D5EE-U+1D607  → a-z
+_FANCY_MAP.update({0x1D5EE + i: chr(0x61 + i) for i in range(26)})
+# Sans Italic A-Z U+1D608-U+1D621  → A-Z
+_FANCY_MAP.update({0x1D608 + i: chr(0x41 + i) for i in range(26)})
+# Sans Italic a-z U+1D622-U+1D63B  → a-z
+_FANCY_MAP.update({0x1D622 + i: chr(0x61 + i) for i in range(26)})
+# Sans Bold Italic A-Z U+1D63C-U+1D655 → A-Z
+_FANCY_MAP.update({0x1D63C + i: chr(0x41 + i) for i in range(26)})
+# Sans Bold Italic a-z U+1D656-U+1D66F → a-z
+_FANCY_MAP.update({0x1D656 + i: chr(0x61 + i) for i in range(26)})
+# Monospace A-Z   U+1D670-U+1D689  → A-Z
+_FANCY_MAP.update({0x1D670 + i: chr(0x41 + i) for i in range(26)})
+# Monospace a-z   U+1D68A-U+1D6A3  → a-z
+_FANCY_MAP.update({0x1D68A + i: chr(0x61 + i) for i in range(26)})
+
+# Mathematical digits
+# Bold digits      U+1D7CE-U+1D7D7 → 0-9
+_FANCY_MAP.update({0x1D7CE + i: str(i) for i in range(10)})
+# Double-struck    U+1D7D8-U+1D7E1 → 0-9
+_FANCY_MAP.update({0x1D7D8 + i: str(i) for i in range(10)})
+# Sans digits      U+1D7E2-U+1D7EB → 0-9
+_FANCY_MAP.update({0x1D7E2 + i: str(i) for i in range(10)})
+# Sans Bold digits U+1D7EC-U+1D7F5 → 0-9
+_FANCY_MAP.update({0x1D7EC + i: str(i) for i in range(10)})
+# Monospace digits U+1D7F6-U+1D7FF → 0-9
+_FANCY_MAP.update({0x1D7F6 + i: str(i) for i in range(10)})
+
+# Fullwidth ASCII variants (U+FF01–U+FF5E) → U+0021–U+007E
+_FANCY_MAP.update({0xFF01 + i: chr(0x21 + i) for i in range(94)})
+_FANCY_MAP[0xFF0D] = '-'   # fullwidth hyphen → regular hyphen
+_FANCY_MAP[0xFF5F] = '('   # fullwidth left parenthesis
+_FANCY_MAP[0xFF60] = ')'   # fullwidth right parenthesis
+_FANCY_MAP[0xFF61] = '.'   # halfwidth ideographic full stop
+_FANCY_MAP[0xFF62] = '['   # halfwidth left corner bracket
+_FANCY_MAP[0xFF63] = ']'   # halfwidth right corner bracket
+_FANCY_MAP[0xFF64] = ','   # halfwidth ideographic comma
+_FANCY_MAP[0xFF65] = ':'   # halfwidth katakana middle dot
+
+# Enclosed alphanumerics  ① → 1, ⑵ → 2, etc. (best-effort)
+# Circled digits  ①-⑳  U+2460-U+2473
+_FANCY_MAP.update({0x2460 + i: str(i + 1) for i in range(20)})
+# Circled 21-35   U+3251-U+325F
+_FANCY_MAP.update({0x3251 + i: str(i + 21) for i in range(15)})
+# Parenthesized digits ⑴-⒇ U+2474-U+2487
+_FANCY_MAP.update({0x2474 + i: str(i + 1) for i in range(20)})
+# Parenthesized 21-32  U+2488-U+2493 (period digits, but similar)
+_FANCY_MAP.update({0x2488 + i: str(i + 1) for i in range(10)})  # ⒈-⒑
+# Circled letters Ⓐ-Ⓩ, ⓐ-ⓩ  U+24B6-U+24CF, U+24D0-U+24E9
+_FANCY_MAP.update({0x24B6 + i: chr(0x41 + i) for i in range(26)})
+_FANCY_MAP.update({0x24D0 + i: chr(0x61 + i) for i in range(26)})
+
+# Letterlike Symbols (™ → TM, ℠ → SM, ℻ → Fax, etc. are handled by NFKD)
+# But some are mapped explicitly:
+_FANCY_MAP[0x2100] = 'a/c'   # Account of
+_FANCY_MAP[0x2101] = 'a/s'   # Addressed to the subject
+_FANCY_MAP[0x2103] = 'C'     # Degree Celsius → just C (or keep ℃ if NFKD handles)
+_FANCY_MAP[0x2105] = 'c/o'   # Care of
+_FANCY_MAP[0x2106] = 'c/u'   # Cada una
+_FANCY_MAP[0x2109] = 'F'     # Degree Fahrenheit
+_FANCY_MAP[0x2116] = 'No'    # Numero sign
+
+# Greek-ish “lookalike” letters often used in fancy names
+# K (U+212A Kelvin sign) → K, Å (U+212B Angstrom) → A
+_FANCY_MAP[0x212A] = 'K'
+_FANCY_MAP[0x212B] = 'A'
+
+# Compatibility characters that NFKD often misses
+_FANCY_MAP[0x2B55] = 'O'     # Heavy large circle → O
+
+# Strike-through / underline / overline characters that people paste
+_FANCY_MAP.update({0x0332: '', 0x0333: '', 0x0336: '', 0x0337: '', 0x0338: '',
+                   0x0335: '', 0x0334: '', 0x0330: '', 0x0331: '', 0x033F: ''})
+
+# Combining enclosing keycap / circle / square (people use these for "badges")
+_FANCY_MAP.update({0x20E3: '', 0x20DD: '', 0x20DE: '', 0x20DF: '', 0x20E0: '',
+                   0x20E2: '', 0x20E4: '', 0x20E5: '', 0x20E6: '', 0x20E7: '',
+                   0x20E8: '', 0x20E9: '', 0x20EA: '', 0x20EB: '', 0x20EC: '',
+                   0x20ED: '', 0x20EE: '', 0x20EF: '', 0x20F0: ''})
+
+
 def normalize_text(text: str) -> str:
     """
     Normalize text for matching.
@@ -151,6 +278,70 @@ def normalize_text(text: str) -> str:
     decomposed = unicodedata.normalize('NFKD', text)
     stripped = ''.join(c for c in decomposed if not unicodedata.combining(c))
     return stripped.lower().strip()
+
+
+def normalize_display_name(text: str) -> str:
+    """
+    Convert fancy/stylized Unicode names to plain readable text.
+    Handles mathematical alphanumeric symbols, fullwidth, enclosed forms,
+    and combining marks that fonts commonly lack. Keeps Arabic intact.
+    """
+    if not text:
+        return ""
+
+    # 1. Map known fancy blocks to plain ASCII
+    result = []
+    for ch in text:
+        cp = ord(ch)
+        if cp in _FANCY_MAP:
+            result.append(_FANCY_MAP[cp])
+        else:
+            result.append(ch)
+    text = ''.join(result)
+
+    # 2. NFKD decomposition + strip combining diacritics
+    #    (catches remaining stylers: accents, strike-through, circled combos, etc.)
+    decomposed = unicodedata.normalize('NFKD', text)
+    text = ''.join(c for c in decomposed if not unicodedata.combining(c))
+
+    # 3. Strip remaining non-printable / control / special-purpose chars
+    #    Keep: letters, numbers, basic punctuation, spaces, Arabic range
+    cleaned = []
+    for c in text:
+        cp = ord(c)
+        # Keep printable ASCII and common spacing
+        if 0x20 <= cp <= 0x7E:
+            cleaned.append(c)
+        # Keep Arabic and Arabic Presentation Forms-B
+        elif (0x0600 <= cp <= 0x06FF) or (0xFE70 <= cp <= 0xFEFF) or (0xFB50 <= cp <= 0xFDFF):
+            cleaned.append(c)
+        # Keep Arabic Presentation Forms-A (extended)
+        elif 0xFB50 <= cp <= 0xFDFF:
+            cleaned.append(c)
+        # Keep general punctuation that might be used
+        elif cp in (0x2018, 0x2019, 0x201C, 0x201D, 0x2026, 0x2013, 0x2014):
+            # smart quotes → straight quotes for safety, keep others
+            if cp == 0x2018 or cp == 0x2019:
+                cleaned.append("'")
+            elif cp == 0x201C or cp == 0x201D:
+                cleaned.append('"')
+            else:
+                cleaned.append(c)
+        # Keep extended Latin letters (accents stripped already, but base remains)
+        elif 0x00A1 <= cp <= 0x024F:   # Latin-1 Supplement + Extended-A/B
+            cleaned.append(c)
+        # Keep zero-width joiner/non-joiner for Arabic shaping context
+        elif cp in (0x200C, 0x200D):
+            cleaned.append(c)
+        # Everything else (symbols, emoji components, remaining math chars, etc.) → drop
+
+    text = ''.join(cleaned)
+
+    # 4. Collapse multiple spaces
+    while '  ' in text:
+        text = text.replace('  ', ' ')
+
+    return text.strip()
 
 
 def names_match(a: str, b: str) -> bool:
@@ -750,7 +941,7 @@ async def render_profile_card(uid: str) -> BytesIO | None:
         draw = ImageDraw.Draw(base)
 
         cfg = L["name"]
-        _cx(draw, user["name"], cfg["cx"], cfg["y"], _font(user["name"], cfg["size"]), cfg["color"])
+        _cx(draw, normalize_display_name(user["name"]), cfg["cx"], cfg["y"], _font(normalize_display_name(user["name"]), cfg["size"]), cfg["color"])
 
         cfg = L["bio"]
         bt = "Empty" if user.get("bio_removed") else (user.get("bio") or "")
@@ -844,7 +1035,7 @@ async def create_welcome_image(profile_img: Image.Image, nickname: str):
         base = Image.alpha_composite(base, tmp)
 
         # ── Draw nickname (gothic gray style, perfectly centered) ──
-        prepared = prepare_text(nickname)
+        prepared = prepare_text(normalize_display_name(nickname))
         if prepared:
             font = _font(nickname, Config.WELCOME_NAME_SIZE)
             draw = ImageDraw.Draw(base)
@@ -1367,7 +1558,7 @@ def _triggered_game(content):
 @client.event(EventType.ChatMemberJoin)
 async def on_join(message: ChatMessage):
     try:
-        nickname = message.author.nickname
+        nickname = normalize_display_name(message.author.nickname)
         avatar_url = getattr(message.author, "avatar_url", None) or ""
         sent = False
 
