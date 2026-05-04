@@ -3,9 +3,9 @@
     "name": "Sor",
     "bio": "يويلي عليكم",
     "bio_removed": false,
-    "games_played": 7,
-    "wins": 4,
-    "wealth": 9826,
+    "games_played": 8,
+    "wins": 5,
+    "wealth": 9831,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -28,8 +28,8 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 5,
-        "wins": 3
+        "plays": 6,
+        "wins": 4
       },
       "bara alsalfa": {
         "plays": 2,
@@ -140,7 +140,7 @@
     "nickname": "みお",
     "bio": "Visca Barça",
     "bio_removed": false,
-    "games_played": 0,
+    "games_played": 1,
     "wins": 0,
     "wealth": 0,
     "owned_assets": [
@@ -152,7 +152,12 @@
     "active_frame": "framedefault",
     "active_bubble": "bubbledefault",
     "active_colour": "black",
-    "game_stats": {},
+    "game_stats": {
+      "4 in a row": {
+        "plays": 1,
+        "wins": 0
+      }
+    },
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmonkhx1a073n0iaz42rg5ajd/0x0/media.jpg?wh=undefinedxundefined"
   },
   "cmo68msef0mbw0ibfehk69elr": {
