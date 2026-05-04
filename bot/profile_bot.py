@@ -844,6 +844,16 @@ async def create_welcome_image(profile_img: Image.Image, nickname: str):
         return None
 
 
+async def _send_welcome_bytes(chat_id, circle_id, card) -> bool:
+    """Send welcome image. Returns True on success, False on failure."""
+    try:
+        await send_image_bytes(chat_id, circle_id, card)
+        return True
+    except Exception as e:
+        logger.warning(f"[welcome] failed to send image: {e}")
+        return False
+
+
 # 13.  SIGNUP STATE MACHINE
 # ══════════════════════════════════════════════════════════════════════════════
 signup_states: dict[str, dict] = {}
@@ -1324,6 +1334,7 @@ async def on_join(message: ChatMessage):
     try:
         nickname = message.author.nickname
         avatar_url = getattr(message.author, "avatar_url", None) or ""
+        sent = False
 
         if avatar_url:
             raw = await _dl(avatar_url)
@@ -1332,19 +1343,19 @@ async def on_join(message: ChatMessage):
                     profile_img = Image.open(BytesIO(raw)).convert("RGBA")
                     card = await create_welcome_image(profile_img, nickname)
                     if card:
-                        await send_image_bytes(message.chatId, message.circleId, card)
-                        logger.info(f"[welcome] sent welcome card for {nickname}")
-                        return
+                        sent = await _send_welcome_bytes(message.chatId, message.circleId, card)
+                        if sent:
+                            logger.info(f"[welcome] sent welcome card for {nickname}")
                 except Exception as e:
-                    logger.warning(f"[welcome] image failed: {e}")
+                    logger.warning(f"[welcome] image creation failed: {e}")
 
-        # Fallback text
-        await client.send_message(
-            message.chatId,
-            f"🌫️ Welcome To Silent Hill, {nickname}!",
-            message.circleId,
-        )
-        logger.info(f"[welcome] sent text fallback for {nickname}")
+        if not sent:
+            await client.send_message(
+                message.chatId,
+                f"🌫️ Welcome To Silent Hill, {nickname}!",
+                message.circleId,
+            )
+            logger.info(f"[welcome] sent text fallback for {nickname}")
     except Exception as e:
         logger.exception(f"[on_join] {e}")
 
