@@ -54,6 +54,7 @@ ASSETS = {
     "bg6":        "bg/bg6.jpg",
     "bg7":        "bg/bg7.jpg",
     "bg8":        "bg/bg8.jpg",
+    "bg9":        "bg/bg9.jpg",
     # ── Frames ─────────────────────────────────────────────────────────────
     "framedefault":  "frames/default-frame.png",   # FREE
     "frame1":        "frames/frame1.png",
@@ -94,6 +95,7 @@ ASSET_PRICES = {
     "bg6": 35,
     "bg7": 35,
     "bg8": 35,
+    "bg9": 35,
 
     # Frames  ──────────────────────────────────────────────────────────────
     "frame1": 20,
