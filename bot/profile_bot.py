@@ -86,6 +86,14 @@ class Config:
     OUTPUT_QUALITY   = 95
     MAX_OUTPUT_WIDTH = 1100
 
+
+    # ── Welcome image settings ────────────────────────────────────
+    WELCOME_BACKGROUND       = _p("shbg.jpg")
+    WELCOME_PROFILE_SIZE     = 303
+    WELCOME_PROFILE_POSITION = (389, 291)
+    WELCOME_NICKNAME_Y       = 650
+    WELCOME_NICKNAME_SIZE    = 70
+
     ACCOUNTS_FILE = _p("accounts.json")
     BANNED_FILE   = _p("banned.json")
     LOG_FILE      = _p("profile_bot.log")
@@ -816,6 +824,26 @@ async def send_profile_card(uid, chat_id, circle_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# WELCOME CARD
+
+async def create_welcome_image(profile_img: Image.Image, nickname: str):
+    try:
+        base = Image.open(Config.WELCOME_BACKGROUND).convert("RGBA")
+        pfp = _circular(profile_img.copy(), Config.WELCOME_PROFILE_SIZE)
+        x, y = Config.WELCOME_PROFILE_POSITION
+        tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        tmp.paste(pfp, (x, y), pfp)
+        base = Image.alpha_composite(base, tmp)
+
+        out = BytesIO()
+        base.convert("RGB").save(out, "JPEG", quality=Config.OUTPUT_QUALITY)
+        out.seek(0)
+        return out
+    except Exception as e:
+        logger.exception(f"[welcome_img] {e}")
+        return None
+
+
 # 13.  SIGNUP STATE MACHINE
 # ══════════════════════════════════════════════════════════════════════════════
 signup_states: dict[str, dict] = {}
@@ -1291,6 +1319,36 @@ def _triggered_game(content):
 # ══════════════════════════════════════════════════════════════════════════════
 # 16.  EVENT HANDLERS
 # ══════════════════════════════════════════════════════════════════════════════
+@client.event(EventType.ChatMemberJoin)
+async def on_join(message: ChatMessage):
+    try:
+        nickname = message.author.nickname
+        avatar_url = getattr(message.author, "avatar_url", None) or ""
+
+        if avatar_url:
+            raw = await _dl(avatar_url)
+            if raw:
+                try:
+                    profile_img = Image.open(BytesIO(raw)).convert("RGBA")
+                    card = await create_welcome_image(profile_img, nickname)
+                    if card:
+                        await send_image_bytes(message.chatId, message.circleId, card)
+                        logger.info(f"[welcome] sent welcome card for {nickname}")
+                        return
+                except Exception as e:
+                    logger.warning(f"[welcome] image failed: {e}")
+
+        # Fallback text
+        await client.send_message(
+            message.chatId,
+            f"🌫️ Welcome To Silent Hill, {nickname}!",
+            message.circleId,
+        )
+        logger.info(f"[welcome] sent text fallback for {nickname}")
+    except Exception as e:
+        logger.exception(f"[on_join] {e}")
+
+
 @client.middleware(EventType.ChatMessage)
 async def _self_filter(message: ChatMessage):
     if message.author.userId == client.userId:
