@@ -5,7 +5,7 @@
     "bio_removed": false,
     "games_played": 8,
     "wins": 5,
-    "wealth": 9831,
+    "wealth": 9796,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -20,7 +20,8 @@
       "bubble3",
       "bg6",
       "bg5",
-      "bg7"
+      "bg7",
+      "bg9"
     ],
     "active_bg": "bg5",
     "active_frame": "frame1",
