@@ -144,11 +144,12 @@
     "bio_removed": false,
     "games_played": 1,
     "wins": 0,
-    "wealth": 35,
+    "wealth": 0,
     "owned_assets": [
       "bgdefault",
       "framedefault",
-      "bubbledefault"
+      "bubbledefault",
+      "bg9"
     ],
     "active_bg": "bgdefault",
     "active_frame": "framedefault",
