@@ -289,7 +289,7 @@
       "bubbledefault",
       "bg6"
     ],
-    "active_bg": "bgdefault",
+    "active_bg": "bg6",
     "active_frame": "framedefault",
     "active_bubble": "bubbledefault",
     "active_colour": "black",
