@@ -3,7 +3,7 @@
     "name": "Sor",
     "bio": "Seek me under the stars",
     "bio_removed": false,
-    "games_played": 11,
+    "games_played": 12,
     "wins": 6,
     "wealth": 9651,
     "owned_assets": [
@@ -34,7 +34,7 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 9,
+        "plays": 10,
         "wins": 5
       },
       "bara alsalfa": {
@@ -306,9 +306,9 @@
     "nickname": "edd",
     "bio": "هاي انا ايد",
     "bio_removed": false,
-    "games_played": 0,
-    "wins": 0,
-    "wealth": 10,
+    "games_played": 1,
+    "wins": 1,
+    "wealth": 15,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -319,7 +319,12 @@
     "active_frame": "framedefault",
     "active_bubble": "bubble3",
     "active_colour": "black",
-    "game_stats": {},
+    "game_stats": {
+      "4 in a row": {
+        "plays": 1,
+        "wins": 1
+      }
+    },
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmosv2pr23oqk0iaj0mr605iq/0x0/media.jpg?wh=undefinedxundefined"
   }
 }
