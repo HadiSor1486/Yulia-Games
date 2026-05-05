@@ -51,7 +51,7 @@ from kyodo.objects.args import ChatMessageTypes, MediaTarget
 import json as _json
 
 from .assets import (
-    ASSETS, COLOR_MAP, FRAME_LAYOUTS, GAME_MAP,
+    ASSETS, COLOR_MAP, FRAME_LAYOUTS, BUBBLE_LAYOUTS, GAME_MAP,
     get_price, get_reward,
 )
 from .games import GAME_CLASSES
@@ -247,7 +247,7 @@ _FANCY_MAP[0x2106] = 'c/u'   # Cada una
 _FANCY_MAP[0x2109] = 'F'     # Degree Fahrenheit
 _FANCY_MAP[0x2116] = 'No'    # Numero sign
 
-# Greek-ish “lookalike” letters often used in fancy names
+# Greek-ish “lookalike" letters often used in fancy names
 # K (U+212A Kelvin sign) → K, Å (U+212B Angstrom) → A
 _FANCY_MAP[0x212A] = 'K'
 _FANCY_MAP[0x212B] = 'A'
@@ -888,7 +888,10 @@ def _paste(base, key, x, y, size, circ=False):
     fn = os.path.join(BASE_DIR, fn)
     if not os.path.exists(fn):
         return base
-    img = Image.open(fn).convert("RGBA")
+    try:
+        img = Image.open(fn).convert("RGBA")
+    except Exception:
+        return base
     if circ:
         img = _circular(img, size)
         tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -902,7 +905,10 @@ def _paste(base, key, x, y, size, circ=False):
 
 
 def _paste_raw(base, raw_bytes, x, y, size):
-    img = _circular(Image.open(BytesIO(raw_bytes)).convert("RGBA"), size)
+    try:
+        img = _circular(Image.open(BytesIO(raw_bytes)).convert("RGBA"), size)
+    except Exception:
+        return base
     tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
     tmp.paste(img, (x, y), img)
     return Image.alpha_composite(base, tmp)
@@ -935,7 +941,14 @@ async def render_profile_card(uid: str) -> BytesIO | None:
         af = user.get("active_frame", "framedefault")
         fl = FRAME_LAYOUTS.get(af, L["frame"])
         base = _paste(base, af, fl["x"], fl["y"], fl["size"])
-        base = _paste(base, user.get("active_bubble", "bubbledefault"), L["bubble"]["x"], L["bubble"]["y"], L["bubble"]["size"])
+
+        # ── BUBBLE: custom layout support (bulletproof fallback) ──
+        ab = user.get("active_bubble", "bubbledefault")
+        bl = BUBBLE_LAYOUTS.get(ab, L["bubble"])
+        if not isinstance(bl, dict) or not all(k in bl for k in ("x", "y", "size")):
+            bl = L["bubble"]
+        base = _paste(base, ab, bl["x"], bl["y"], bl["size"])
+
         pg, ik = get_primary_game(uid)
         hg = pg is not None and ik is not None
         if hg:
@@ -947,6 +960,9 @@ async def render_profile_card(uid: str) -> BytesIO | None:
 
         cfg = L["bio"]
         bt = "Empty" if user.get("bio_removed") else (user.get("bio") or "")
+        # Normalize bio display (strips fancy fonts, same as welcome names)
+        if bt and bt != "Empty":
+            bt = normalize_display_name(bt)
         bc = _hex_rgba(COLOR_MAP.get(user.get("active_colour", "black"), "#1E1E1E"))
         font = _font(bt, cfg["size"])
         lines = _wrap(bt, font, cfg["max_width"], cfg["max_lines"])
@@ -1143,6 +1159,8 @@ async def handle_signup_step(message, content) -> bool:
         if not content.lower().startswith("bio:"):
             return False
         bio = content[4:].strip()
+        # Normalize fancy/stylized fonts so the stored bio is clean & readable
+        bio = normalize_display_name(bio)
         if len(bio) > 100:
             await client.send_message(cid, f"⚠️ Bio too long ({len(bio)}). Max 100.", circ)
             return True
@@ -1333,6 +1351,9 @@ async def cmd_set_bio(msg, bio):
         if not has_account(uid):
             await client.send_message(cid, "❌ Use /signup first!", circ)
             return
+        bio = bio.strip()
+        # Normalize fancy/stylized fonts so the stored bio is clean & readable
+        bio = normalize_display_name(bio)
         if len(bio) > 100:
             await client.send_message(cid, f"⚠️ Too long ({len(bio)}). Max 100.", circ)
             return
