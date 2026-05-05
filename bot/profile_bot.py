@@ -51,7 +51,7 @@ from kyodo.objects.args import ChatMessageTypes, MediaTarget
 import json as _json
 
 from .assets import (
-    ASSETS, COLOR_MAP, GAME_MAP,
+    ASSETS, COLOR_MAP, FRAME_LAYOUTS, GAME_MAP,
     get_price, get_reward,
 )
 from .games import GAME_CLASSES
@@ -932,7 +932,9 @@ async def render_profile_card(uid: str) -> BytesIO | None:
             raw = await _dl(av)
             if raw:
                 base = _paste_raw(base, raw, L["pfp"]["x"], L["pfp"]["y"], L["pfp"]["size"])
-        base = _paste(base, user.get("active_frame", "framedefault"), L["frame"]["x"], L["frame"]["y"], L["frame"]["size"])
+        af = user.get("active_frame", "framedefault")
+        fl = FRAME_LAYOUTS.get(af, L["frame"])
+        base = _paste(base, af, fl["x"], fl["y"], fl["size"])
         base = _paste(base, user.get("active_bubble", "bubbledefault"), L["bubble"]["x"], L["bubble"]["y"], L["bubble"]["size"])
         pg, ik = get_primary_game(uid)
         hg = pg is not None and ik is not None
@@ -1839,4 +1841,3 @@ if __name__ == "__main__":
         except Exception as e:
             logger.error(f"[top] {e}")
             time.sleep(5)
-
