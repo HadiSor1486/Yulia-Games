@@ -273,5 +273,25 @@
       }
     },
     "avatar_url": "https://cu.kyodo.app/avatar/cmmbc0lw8013w3erq6h85ga1v_444x512.jpeg"
+  },
+  "cmjc4v8gi03jdn53e0h9its5k": {
+    "name": "sobin",
+    "nickname": "sobin★.",
+    "bio": "𝑹𝒊𝒔𝒌",
+    "bio_removed": false,
+    "games_played": 0,
+    "wins": 0,
+    "wealth": 0,
+    "owned_assets": [
+      "bgdefault",
+      "framedefault",
+      "bubbledefault"
+    ],
+    "active_bg": "bgdefault",
+    "active_frame": "framedefault",
+    "active_bubble": "bubbledefault",
+    "active_colour": "black",
+    "game_stats": {},
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmo4rknl417tw0jb32wlae12c/0x0/media.jpg?wh=undefinedxundefined"
   }
 }
