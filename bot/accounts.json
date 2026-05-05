@@ -3,7 +3,7 @@
     "name": "Sor",
     "bio": "Seek me under the stars",
     "bio_removed": false,
-    "games_played": 9,
+    "games_played": 10,
     "wins": 6,
     "wealth": 9686,
     "owned_assets": [
@@ -33,7 +33,7 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 7,
+        "plays": 8,
         "wins": 5
       },
       "bara alsalfa": {
@@ -253,9 +253,9 @@
     "nickname": "",
     "bio": "َ",
     "bio_removed": false,
-    "games_played": 1,
-    "wins": 0,
-    "wealth": 0,
+    "games_played": 2,
+    "wins": 1,
+    "wealth": 5,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -268,8 +268,8 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 1,
-        "wins": 0
+        "plays": 2,
+        "wins": 1
       }
     },
     "avatar_url": "https://cu.kyodo.app/avatar/cmmbc0lw8013w3erq6h85ga1v_444x512.jpeg"
