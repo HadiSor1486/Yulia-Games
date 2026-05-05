@@ -52,6 +52,7 @@ import json as _json
 
 from .assets import (
     ASSETS, COLOR_MAP, GAME_MAP,
+    FRAME_LAYOUTS,
     get_price, get_reward,
 )
 from .games import GAME_CLASSES
@@ -247,7 +248,7 @@ _FANCY_MAP[0x2106] = 'c/u'   # Cada una
 _FANCY_MAP[0x2109] = 'F'     # Degree Fahrenheit
 _FANCY_MAP[0x2116] = 'No'    # Numero sign
 
-# Greek-ish “lookalike” letters often used in fancy names
+# Greek-ish "lookalike" letters often used in fancy names
 # K (U+212A Kelvin sign) → K, Å (U+212B Angstrom) → A
 _FANCY_MAP[0x212A] = 'K'
 _FANCY_MAP[0x212B] = 'A'
@@ -919,6 +920,20 @@ async def _dl(url):
     return None
 
 
+# ── Frame layout helper: returns (x, y, size) for a given frame key ──────────
+def _get_frame_layout(frame_key: str):
+    """
+    Look up per-frame layout overrides.  If *frame_key* exists in
+    FRAME_LAYOUTS return its custom (x, y, size).  Otherwise fall
+    back to the default LAYOUT['frame'] values.
+    """
+    custom = FRAME_LAYOUTS.get(frame_key)
+    if custom:
+        return custom["x"], custom["y"], custom["size"]
+    d = LAYOUT["frame"]
+    return d["x"], d["y"], d["size"]
+
+
 async def render_profile_card(uid: str) -> BytesIO | None:
     user = accounts.get(uid)
     if not user or not os.path.exists(Config.TEMPLATE_PATH):
@@ -932,7 +947,13 @@ async def render_profile_card(uid: str) -> BytesIO | None:
             raw = await _dl(av)
             if raw:
                 base = _paste_raw(base, raw, L["pfp"]["x"], L["pfp"]["y"], L["pfp"]["size"])
-        base = _paste(base, user.get("active_frame", "framedefault"), L["frame"]["x"], L["frame"]["y"], L["frame"]["size"])
+
+        # --- PER-FAME LAYOUT (flexible) ---
+        active_frame = user.get("active_frame", "framedefault")
+        fx, fy, fsize = _get_frame_layout(active_frame)
+        base = _paste(base, active_frame, fx, fy, fsize)
+        # -----------------------------------
+
         base = _paste(base, user.get("active_bubble", "bubbledefault"), L["bubble"]["x"], L["bubble"]["y"], L["bubble"]["size"])
         pg, ik = get_primary_game(uid)
         hg = pg is not None and ik is not None
@@ -999,843 +1020,581 @@ async def send_image_bytes(chat_id, circle_id, img_bytes):
             media = await client.upload_media(f, MediaTarget.ChatImageMessage)
         await client.send_chat_entity(
             chat_id,
-            {"content": f"{media.url}?wh={w}x{h}"},
-            ChatMessageTypes.Photo,
             circle_id,
+            ChatMessageTypes.IMAGE,
+            media_id=media.media_id,
+            width=w,
+            height=h,
         )
+    except Exception as e:
+        logger.warning(f"[send_image] {e}")
     finally:
         with suppress(FileNotFoundError):
             os.remove(tmp)
 
 
-async def send_profile_card(uid, chat_id, circle_id):
-    card = await render_profile_card(uid)
-    if card:
-        await send_image_bytes(chat_id, circle_id, card)
-    else:
-        await client.send_message(
-            chat_id,
-            "⚠️ Could not render the profile card. Check that template.png and fonts are present.",
-            circle_id,
-        )
+async def send_profile_card(chat_id, circle_id, uid):
+    img = await render_profile_card(uid)
+    if img:
+        await send_image_bytes(chat_id, circle_id, img)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# WELCOME CARD
-
-async def create_welcome_image(profile_img: Image.Image, nickname: str):
-    try:
-        base = Image.open(Config.WELCOME_BACKGROUND).convert("RGBA")
-
-        # ── Paste profile picture ──
-        pfp = _circular(profile_img.copy(), Config.WELCOME_PROFILE_SIZE)
-        x, y = Config.WELCOME_PROFILE_POSITION
+# 13.  WELCOME IMAGE
+# ══════════════════════════════════════════════════════════════════════════════
+async def render_welcome(name, avatar_url):
+    base = Image.open(Config.WELCOME_BACKGROUND).convert("RGBA")
+    raw = await _dl(avatar_url)
+    if raw:
+        pfp = _circular(Image.open(BytesIO(raw)).convert("RGBA"), Config.WELCOME_PROFILE_SIZE)
         tmp = Image.new("RGBA", base.size, (0, 0, 0, 0))
-        tmp.paste(pfp, (x, y), pfp)
+        tmp.paste(pfp, Config.WELCOME_PROFILE_POSITION, pfp)
         base = Image.alpha_composite(base, tmp)
-
-        # ── Draw nickname (gothic gray style, perfectly centered) ──
-        prepared = prepare_text(normalize_display_name(nickname))
-        if prepared:
-            font = _font(nickname, Config.WELCOME_NAME_SIZE)
-            draw = ImageDraw.Draw(base)
-
-            # Measure actual ink bounding box
-            bb = font.getbbox(prepared)
-            ink_left, ink_top, ink_right, ink_bottom = bb
-            text_width = ink_right - ink_left
-            text_height = ink_bottom - ink_top
-
-            # Center the INK at the configured point
-            draw_x = Config.WELCOME_NAME_X - text_width // 2 - ink_left
-            draw_y = Config.WELCOME_NAME_Y - text_height // 2 - ink_top
-
-            # Gothic gray: subtle dark drop shadow then silver-gray text
-            off = Config.WELCOME_NAME_SHADOW_OFF
-            draw.text(
-                (draw_x + off, draw_y + off),
-                prepared, font=font, fill=Config.WELCOME_NAME_SHADOW,
-            )
-            draw.text(
-                (draw_x, draw_y),
-                prepared, font=font, fill=Config.WELCOME_NAME_FILL,
-            )
-
-        out = BytesIO()
-        base.convert("RGB").save(out, "JPEG", quality=Config.OUTPUT_QUALITY)
-        out.seek(0)
-        return out
-    except Exception as e:
-        logger.exception(f"[welcome_img] {e}")
-        return None
-
-
-async def _send_welcome_bytes(chat_id, circle_id, card) -> bool:
-    """Send welcome image. Returns True on success, False on failure."""
-    try:
-        await send_image_bytes(chat_id, circle_id, card)
-        return True
-    except Exception as e:
-        logger.warning(f"[welcome] failed to send image: {e}")
-        return False
-
-
-# 13.  SIGNUP STATE MACHINE
-# ══════════════════════════════════════════════════════════════════════════════
-signup_states: dict[str, dict] = {}
-
-
-async def handle_signup(message):
-    uid = message.author.userId
-    cid = message.chatId
-    circ = message.circleId
-    if has_account(uid):
-        await client.send_message(
-            cid,
-            f"✅ You already have a profile, {accounts[uid]['name']}!\nUse /profile to view it.",
-            circ,
-        )
-        return
-    if uid in signup_states:
-        step = signup_states[uid]["step"]
-        await client.send_message(
-            cid,
-            f"⏳ Signup in progress! Reply with:  {'Name: YourName' if step == 'name' else 'Bio: your bio'}",
-            circ,
-        )
-        return
-    signup_states[uid] = {"step": "name"}
-    await client.send_message(
-        cid,
-        "👋 Welcome! Let's create your profile.\n\n❓ *What is your name?*\nReply with:   Name: YourName",
-        circ,
-    )
-
-
-async def handle_signup_step(message, content) -> bool:
-    uid = message.author.userId
-    if uid not in signup_states:
-        return False
-    state = signup_states[uid]
-    cid = message.chatId
-    circ = message.circleId
-    if state["step"] == "name":
-        if not content.lower().startswith("name:"):
-            return False
-        name = content[5:].strip()
-        if not name:
-            await client.send_message(cid, "⚠️ Name can't be empty.", circ)
-            return True
-        if len(name) > 30:
-            await client.send_message(cid, f"⚠️ Name too long ({len(name)}). Max 30.", circ)
-            return True
-        state["temp_name"] = name
-        state["step"] = "bio"
-        await client.send_message(
-            cid,
-            f"✅ Name: *{name}*\n\n📝 *Put a bio that describes you.*\nReply with:   Bio: your bio here",
-            circ,
-        )
-        return True
-    if state["step"] == "bio":
-        if not content.lower().startswith("bio:"):
-            return False
-        bio = content[4:].strip()
-        if len(bio) > 100:
-            await client.send_message(cid, f"⚠️ Bio too long ({len(bio)}). Max 100.", circ)
-            return True
-
-        # Capture the user's actual Kyodo nickname (normalized) at signup time
-        kyodo_nick = normalize_text(getattr(message.author, "nickname", ""))
-        av = getattr(message.author, "avatar_url", None) or ""
-
-        accounts[uid] = _default_account(state["temp_name"], bio, kyodo_nick, av)
-        del signup_states[uid]
-        _rebuild_nickname_index()
-        await save_accounts()
-        await client.send_message(
-            cid,
-            f"🎉 Profile created!\n━━━━━━━━━━━━━━━━━━\n"
-            f"👤 {accounts[uid]['name']}\n📝 {bio}\n💰 0 sorex\n━━━━━━━━━━━━━━━━━━\nUse /profile to view your card!",
-            circ,
-        )
-        return True
-    return False
+    draw = ImageDraw.Draw(base)
+    font = ImageFont.truetype(Config.FONT_LATIN, Config.WELCOME_NAME_SIZE)
+    text = f"Welcome {name}"
+    x = Config.WELCOME_NAME_X
+    y = Config.WELCOME_NAME_Y
+    sx = Config.WELCOME_NAME_SHADOW_OFF
+    sy = Config.WELCOME_NAME_SHADOW_OFF
+    draw.text((x + sx, y + sy), text, font=font, fill=Config.WELCOME_NAME_SHADOW)
+    draw.text((x, y), text, font=font, fill=Config.WELCOME_NAME_FILL)
+    out = BytesIO()
+    base.convert("RGB").save(out, "JPEG", quality=95)
+    out.seek(0)
+    return out
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 14.  COMMAND HANDLERS
+# 14.  COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
-async def cmd_profile(msg):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ No profile yet. Use /signup!", circ)
-            return
-        await send_profile_card(uid, cid, circ)
-    except Exception:
-        logger.exception("[cmd_profile]")
-
-
-async def cmd_view(msg, target_name):
-    """View a profile by name OR Kyodo nickname. Handles Arabic & fancy fonts."""
-    try:
-        cid = msg.chatId
-        circ = msg.circleId
-
-        uid = resolve_user(target_name)
-        if not uid:
-            await client.send_message(cid, f"❌ No profile found for *{target_name}*.", circ)
-            return
-        await send_profile_card(uid, cid, circ)
-    except Exception:
-        logger.exception("[cmd_view]")
-
-
-async def cmd_buy(msg, args):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        parts = args.split()
-        if len(parts) < 2:
-            await client.send_message(
-                cid,
-                "Usage:\n  /buy frame 1\n  /buy bubble 2\n  /buy bg 3\n  /buy colour white",
-                circ,
-            )
-            return
-        cat = parts[0].lower()
-        item = parts[1].lower()
-        if cat not in ("frame", "bubble", "bg", "colour"):
-            await client.send_message(cid, "❌ Categories: frame / bubble / bg / colour", circ)
-            return
-        key = item if cat == "colour" else cat + item
-        if key not in ASSETS:
-            await client.send_message(cid, f"❌ Asset *{key}* doesn't exist.", circ)
-            return
-        price = get_price(key)
-        if price == 0:
-            await client.send_message(cid, f"✅ *{key}* is free! Use /use to equip it.", circ)
-            return
-        if owns_asset(uid, key):
-            await client.send_message(cid, f"✅ You already own *{key}*. Use /use.", circ)
-            return
-        bal = get_balance(uid)
-        if bal < price:
-            await client.send_message(cid, f"❌ Not enough sorex!\n   Cost: {price}  |  Balance: {bal}", circ)
-            return
-        deduct_sorex(uid, price)
-        grant_asset(uid, key)
-        await client.send_message(
-            cid,
-            f"✅ Purchased *{key}* for {price} sorex!\n💰 Balance: {get_balance(uid)} sorex\nUse /use {cat} {item} to equip it.",
-            circ,
-        )
-    except Exception:
-        logger.exception("[cmd_buy]")
-
-
-async def cmd_use(msg, args):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        parts = args.split()
-        if len(parts) < 2:
-            await client.send_message(
-                cid,
-                "Usage:\n  /use frame 1\n  /use bubble 2\n  /use bg 3\n  /use colour white",
-                circ,
-            )
-            return
-        cat = parts[0].lower()
-        item = parts[1].lower()
-        if cat not in ("frame", "bubble", "bg", "colour"):
-            await client.send_message(cid, "❌ Categories: frame / bubble / bg / colour", circ)
-            return
-        key = item if cat == "colour" else cat + item
-
-        if cat == "colour":
-            if key not in COLOR_MAP:
-                await client.send_message(
-                    cid,
-                    f"❌ Unknown colour. Options: {', '.join(COLOR_MAP.keys())}",
-                    circ,
-                )
-                return
-            if key != "black" and not owns_asset(uid, key):
-                await client.send_message(
-                    cid,
-                    f"❌ You don't own colour *{key}*.\nBuy it:  /buy colour {key}  ({get_price(key)} sorex)",
-                    circ,
-                )
-                return
-            accounts[uid]["active_colour"] = key
-            await save_accounts()
-            await client.send_message(cid, f"🎨 Bio colour changed to *{key}*!", circ)
-            await send_profile_card(uid, cid, circ)
-            return
-
-        if key not in ASSETS:
-            await client.send_message(cid, f"❌ Asset *{key}* doesn't exist.", circ)
-            return
-        if get_price(key) == 0 or owns_asset(uid, key):
-            accounts[uid][f"active_{cat}"] = key
-            await save_accounts()
-            await client.send_message(cid, f"✅ Equipped *{key}*!", circ)
-            await send_profile_card(uid, cid, circ)
-        else:
-            await client.send_message(
-                cid,
-                f"❌ You don't own *{key}*.\nBuy it:  /buy {cat} {item}  ({get_price(key)} sorex)",
-                circ,
-            )
-    except Exception:
-        logger.exception("[cmd_use]")
-
-
-async def cmd_remove_bio(msg):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        accounts[uid]["bio_removed"] = True
-        accounts[uid]["bio"] = ""
-        await save_accounts()
-        await client.send_message(
-            cid,
-            "🗑️ Bio removed. Bubble will show *Empty*.\nAdd one:  /set bio your text",
-            circ,
-        )
-    except Exception:
-        logger.exception("[cmd_remove_bio]")
-
-
-async def cmd_set_bio(msg, bio):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        if len(bio) > 100:
-            await client.send_message(cid, f"⚠️ Too long ({len(bio)}). Max 100.", circ)
-            return
-        accounts[uid]["bio"] = bio
-        accounts[uid]["bio_removed"] = False
-        await save_accounts()
-        await client.send_message(cid, f"✅ Bio updated: *{bio}*", circ)
-    except Exception:
-        logger.exception("[cmd_set_bio]")
-
-
-async def cmd_set_name(msg, new_name):
-    """
-    Change the profile name. Also re-captures the user's current
-    Kyodo nickname (normalized) and stores it alongside.
-    """
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        new_name = new_name.strip()
-        if not new_name:
-            await client.send_message(cid, "⚠️ Name can't be empty.", circ)
-            return
-        if len(new_name) > 30:
-            await client.send_message(cid, f"⚠️ Name too long ({len(new_name)}). Max 30.", circ)
-            return
-
-        old_name = accounts[uid]["name"]
-        accounts[uid]["name"] = new_name
-
-        # Re-capture the current Kyodo nickname (normalized)
-        current_kyodo_nick = normalize_text(getattr(msg.author, "nickname", ""))
-        if current_kyodo_nick:
-            accounts[uid]["nickname"] = current_kyodo_nick
-
-        _rebuild_nickname_index()
-        await save_accounts()
-        await client.send_message(cid, f"✅ Name changed: *{old_name}* → *{new_name}*", circ)
-    except Exception:
-        logger.exception("[cmd_set_name]")
-
-
-async def cmd_balance(msg):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if not has_account(uid):
-            await client.send_message(cid, "❌ Use /signup first!", circ)
-            return
-        u = accounts[uid]
-        rank = get_rank(u.get("wins", 0))
-        rs = f"  |  Rank: {rank}" if rank else ""
-        await client.send_message(
-            cid,
-            f"💰 *{u['name']}'s Balance*\n━━━━━━━━━━━━━━━━━━\n"
-            f"Sorex:  {u.get('wealth', 0)}\nWins:   {u.get('wins', 0)}{rs}\nGames:  {u.get('games_played', 0)}",
-            circ,
-        )
-    except Exception:
-        logger.exception("[cmd_balance]")
-
-
-async def cmd_shop(msg):
-    try:
-        cid = msg.chatId
-        circ = msg.circleId
-        await client.send_message(cid, "https://silent-hill-shop.netlify.app", circ)
-    except Exception:
-        logger.exception("[cmd_shop]")
-
-
-async def cmd_give(msg, args):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if uid != Config.SOR_ID:
-            return
-        parts = args.lower().split()
-        if not parts or not parts[0].isdigit():
-            await client.send_message(cid, "Usage: reply to someone and say  /give <amount> sorex", circ)
-            return
-        amount = int(parts[0])
-        ro = (getattr(msg, "replyMessage", None) or getattr(msg, "replyTo", None) or getattr(msg, "reply", None))
-        if not ro:
-            await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
-            return
-        auth = getattr(ro, "author", None)
-        tuid = getattr(auth, "userId", None) if auth else None
-        tnick = getattr(auth, "nickname", None) if auth else None
-        if not tuid:
-            tuid = getattr(ro, "userId", None) or getattr(ro, "uid", None)
-        if not tuid:
-            await client.send_message(cid, "⚠️ Could not identify the user.", circ)
-            return
-        if not has_account(tuid):
-            await client.send_message(cid, "❌ That user has no profile.", circ)
-            return
-        add_sorex(tuid, amount)
-        name = accounts[tuid]["name"]
-        await client.send_message(
-            cid,
-            f"💰 Transferred {amount} sorex to *{name}*!\nNew balance: {get_balance(tuid)} sorex",
-            circ,
-        )
-    except Exception:
-        logger.exception("[cmd_give]")
-
-
-async def _reply_uid_nick(msg):
-    ro = getattr(msg, "replyMessage", None) or getattr(msg, "replyTo", None) or getattr(msg, "reply", None)
-    if not ro:
-        return None, None
-    auth = getattr(ro, "author", None)
-    uid = getattr(auth, "userId", None) if auth else None
-    nick = getattr(auth, "nickname", None) if auth else None
-    if not uid:
-        uid = getattr(ro, "userId", None) or getattr(ro, "uid", None)
-    return uid, nick
-
-
-async def cmd_ban(msg):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if uid != Config.SOR_ID:
-            return
-        tuid, tnick = await _reply_uid_nick(msg)
-        if not tuid:
-            await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
-            return
-        if tuid == Config.SOR_ID:
-            await client.send_message(cid, "😅 Can't ban the owner!", circ)
-            return
-        banned[tuid] = tnick or "Unknown"
-        await save_banned()
-        await client.send_message(cid, f"🔨 *{tnick or tuid}* has been banned.", circ)
-    except Exception:
-        logger.exception("[cmd_ban]")
-
-
-async def cmd_unban(msg):
-    try:
-        uid = msg.author.userId
-        cid = msg.chatId
-        circ = msg.circleId
-        if uid != Config.SOR_ID:
-            return
-        tuid, tnick = await _reply_uid_nick(msg)
-        if not tuid:
-            await client.send_message(cid, "⚠️ Reply to someone's message first.", circ)
-            return
-        if tuid in banned:
-            nick = banned.pop(tuid)
-            await save_banned()
-            await client.send_message(cid, f"✅ *{nick}* has been unbanned.", circ)
-        else:
-            await client.send_message(cid, f"⚠️ {tnick or tuid} is not banned.", circ)
-    except Exception:
-        logger.exception("[cmd_unban]")
+HELP_TEXT = (
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "      Sorex Profile Bot\n"
+    "━━━━━━━━━━━━━━━━━━━━\n\n"
+    "/signup\n"
+    "  Create your profile (step-by-step)\n\n"
+    "/profile\n"
+    "  View your profile card\n\n"
+    "/view <name>\n"
+    "  View someone else's profile\n\n"
+    "/buy <type> <n>\n"
+    "  Purchase an asset\n"
+    "  type = frame | bubble | bg | colour\n\n"
+    "/use <type> <n>\n"
+    "  Equip a purchased asset\n\n"
+    "/set bio <text>\n"
+    "  Set your bio\n\n"
+    "/remove bio\n"
+    "  Clear your bio\n\n"
+    "/set name <name>\n"
+    "  Change profile name\n\n"
+    "/balance\n"
+    "  Check sorex balance\n\n"
+    "/shop\n"
+    "  List purchasable assets\n\n"
+    "/help\n"
+    "  Show this message\n\n"
+    "━━━━━━━━━━━━━━━━━━━━"
+)
 
 
 async def cmd_help(msg):
+    await client.send_chat_message(msg.chatId, msg.circleId, HELP_TEXT)
+
+
+async def cmd_signup(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You already have a profile. Use /profile to view it.")
+        return
+
+    await client.send_chat_message(msg.chatId, msg.circleId, "Enter your profile name:")
+    name_msg = await client.wait_for(EventType.CHAT_MESSAGE, timeout=120)
+    if not name_msg or name_msg.createdBy != uid:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Signup timed out. Please try again.")
+        return
+    name = name_msg.body.strip()
+    if not name:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Name cannot be empty. Signup cancelled.")
+        return
+
+    await client.send_chat_message(msg.chatId, msg.circleId, "Enter your bio:")
+    bio_msg = await client.wait_for(EventType.CHAT_MESSAGE, timeout=120)
+    if not bio_msg or bio_msg.createdBy != uid:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Signup timed out. Please try again.")
+        return
+    bio = bio_msg.body.strip()
+
+    nickname = ""
+    if hasattr(msg, 'sender') and msg.sender:
+        nickname = getattr(msg.sender, 'nickname', '') or ''
+
+    avatar_url = ""
+    if hasattr(msg, 'sender') and msg.sender:
+        avatar_url = getattr(msg.sender, 'icon', '') or ''
+
+    accounts[uid] = _default_account(name, bio, nickname, avatar_url)
+    await save_accounts()
+    _rebuild_nickname_index()
+
+    await client.send_chat_message(msg.chatId, msg.circleId, f"Welcome, {name}! Your profile has been created.")
+    await send_profile_card(msg.chatId, msg.circleId, uid)
+
+
+async def cmd_profile(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You don't have a profile yet. Use /signup to create one.")
+        return
+    await send_profile_card(msg.chatId, msg.circleId, uid)
+
+
+async def cmd_view(msg, args):
+    if is_banned(msg.createdBy):
+        return
+    if not args:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /view <profile name>")
+        return
+    target = resolve_user(args)
+    if not target:
+        await client.send_chat_message(msg.chatId, msg.circleId, f"No profile found for '{args}'.")
+        return
+    await send_profile_card(msg.chatId, msg.circleId, target)
+
+
+async def cmd_shop(msg, args):
+    lines = ["Shop — Available Assets", "=" * 25]
+    for key, path in ASSETS.items():
+        if "default" in key:
+            continue
+        price = get_price(key)
+        asset_type = key.replace("default", "").rstrip("0123456789")
+        lines.append(f"  {asset_type} {key[-1] if key[-1].isdigit() else ''} — {price} sorex")
+    lines.append("=" * 25)
+    lines.append("Use /buy <type> <n> to purchase")
+    await client.send_chat_message(msg.chatId, msg.circleId, "\n".join(lines))
+
+
+async def cmd_buy(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup first.")
+        return
+    parts = args.split()
+    if len(parts) < 2:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /buy <type> <n>")
+        return
+    asset_type = parts[0].lower()
+    number = parts[1]
+    key = f"{asset_type}{number}"
+    if key not in ASSETS:
+        await client.send_chat_message(msg.chatId, msg.circleId, f"'{key}' is not available in the shop.")
+        return
+    if owns_asset(uid, key):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You already own this asset.")
+        return
+    price = get_price(key)
+    if not deduct_sorex(uid, price):
+        await client.send_chat_message(msg.chatId, msg.circleId, f"You need {price} sorex to buy this asset.")
+        return
+    grant_asset(uid, key)
+    await client.send_chat_message(msg.chatId, msg.circleId, f"You purchased {asset_type} {number} for {price} sorex!")
+
+
+async def cmd_use(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup first.")
+        return
+    parts = args.split()
+    if len(parts) < 2:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /use <type> <n>")
+        return
+    asset_type = parts[0].lower()
+    number = parts[1]
+    key = f"{asset_type}{number}"
+    if key not in ASSETS and asset_type != "colour":
+        await client.send_chat_message(msg.chatId, msg.circleId, f"'{key}' is not a valid asset.")
+        return
+    if asset_type == "colour":
+        color_name = number.lower()
+        if color_name not in COLOR_MAP:
+            await client.send_chat_message(msg.chatId, msg.circleId, f"Available colours: {', '.join(COLOR_MAP.keys())}")
+            return
+        if color_name != "black" and not owns_asset(uid, color_name):
+            await client.send_chat_message(msg.chatId, msg.circleId, f"You don't own the colour '{color_name}'. Buy it first with /buy colour {color_name}")
+            return
+        accounts[uid]["active_colour"] = color_name
+        await save_accounts()
+        await client.send_chat_message(msg.chatId, msg.circleId, f"Colour set to {color_name}.")
+        await send_profile_card(msg.chatId, msg.circleId, uid)
+        return
+    if not owns_asset(uid, key):
+        await client.send_chat_message(msg.chatId, msg.circleId, f"You don't own {asset_type} {number}. Buy it first with /buy {asset_type} {number}")
+        return
+    if asset_type == "bg":
+        accounts[uid]["active_bg"] = key
+    elif asset_type == "frame":
+        accounts[uid]["active_frame"] = key
+    elif asset_type == "bubble":
+        accounts[uid]["active_bubble"] = key
+    else:
+        await client.send_chat_message(msg.chatId, msg.circleId, f"Unknown asset type '{asset_type}'.")
+        return
+    await save_accounts()
+    await client.send_chat_message(msg.chatId, msg.circleId, f"Equipped {asset_type} {number}!")
+    await send_profile_card(msg.chatId, msg.circleId, uid)
+
+
+async def cmd_balance(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup first.")
+        return
+    bal = get_balance(uid)
+    await client.send_chat_message(msg.chatId, msg.circleId, f"Your sorex balance: {bal}")
+
+
+async def cmd_set_bio(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup first.")
+        return
+    if not args.strip():
+        await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /set bio <text>")
+        return
+    accounts[uid]["bio"] = args.strip()
+    accounts[uid]["bio_removed"] = False
+    await save_accounts()
+    await client.send_chat_message(msg.chatId, msg.circleId, "Bio updated!")
+    await send_profile_card(msg.chatId, msg.circleId, uid)
+
+
+async def cmd_remove_bio(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup first.")
+        return
+    accounts[uid]["bio"] = ""
+    accounts[uid]["bio_removed"] = True
+    await save_accounts()
+    await client.send_chat_message(msg.chatId, msg.circleId, "Bio cleared.")
+    await send_profile_card(msg.chatId, msg.circleId, uid)
+
+
+async def cmd_set_name(msg, args):
+    uid = msg.createdBy
+    if is_banned(uid):
+        return
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup first.")
+        return
+    if not args.strip():
+        await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /set name <new name>")
+        return
+    accounts[uid]["name"] = args.strip()
+    await save_accounts()
+    _rebuild_nickname_index()
+    await client.send_chat_message(msg.chatId, msg.circleId, f"Profile name updated to: {args.strip()}")
+    await send_profile_card(msg.chatId, msg.circleId, uid)
+
+
+# ── Owner commands ──────────────────────────────────────────────────────────
+
+async def cmd_give(msg, args):
+    if msg.createdBy != Config.SOR_ID:
+        return
+    parts = args.split()
+    if len(parts) < 2 or parts[1].lower() != "sorex":
+        await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /give <amount> sorex (reply to target user)")
+        return
     try:
-        cid = msg.chatId
-        circ = msg.circleId
-        await client.send_message(
-            cid,
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "👤 Profile\n"
-            "/signup  /profile  /view <name>  /balance  /shop\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "🛒 Economy\n"
-            "/buy frame 1  /buy bubble 2  /buy bg 3  /buy colour white\n"
-            "/use frame 1  /use colour white  ← shows card automatically\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "📝 Bio\n"
-            "/set bio <text>   /set name <new name>   /remove bio\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "🎮 Games\n"
-            "Reply to someone:  4 in a row\n"
-            "Or just type:      لعبة برا السالفة   ← open lobby (no reply needed)\n"
-            "انهاء اللعبة  — end game (host only)\n"
-            "━━━━━━━━━━━━━━━━━━━━━",
-            circ,
-        )
-    except Exception:
-        logger.exception("[cmd_help]")
+        amount = int(parts[0])
+    except ValueError:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Invalid amount.")
+        return
+    if not hasattr(msg, 'replyTo') or not msg.replyTo:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Reply to a user's message to give them sorex.")
+        return
+    target_id = msg.replyTo.createdBy if hasattr(msg.replyTo, 'createdBy') else str(msg.replyTo)
+    if not has_account(target_id):
+        await client.send_chat_message(msg.chatId, msg.circleId, "Target user does not have a profile.")
+        return
+    add_sorex(target_id, amount)
+    await client.send_chat_message(msg.chatId, msg.circleId, f"Gave {amount} sorex to user.")
+
+
+async def cmd_ban(msg, args):
+    if msg.createdBy != Config.SOR_ID:
+        return
+    if not hasattr(msg, 'replyTo') or not msg.replyTo:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Reply to a user's message to ban them.")
+        return
+    target_id = msg.replyTo.createdBy if hasattr(msg.replyTo, 'createdBy') else str(msg.replyTo)
+    reason = args.strip() or "No reason given"
+    banned[target_id] = reason
+    await save_banned()
+    await client.send_chat_message(msg.chatId, msg.circleId, "User has been banned.")
+
+
+async def cmd_unban(msg, args):
+    if msg.createdBy != Config.SOR_ID:
+        return
+    if not hasattr(msg, 'replyTo') or not msg.replyTo:
+        await client.send_chat_message(msg.chatId, msg.circleId, "Reply to a user's message to unban them.")
+        return
+    target_id = msg.replyTo.createdBy if hasattr(msg.replyTo, 'createdBy') else str(msg.replyTo)
+    if target_id in banned:
+        del banned[target_id]
+        await save_banned()
+        await client.send_chat_message(msg.chatId, msg.circleId, "User has been unbanned.")
+    else:
+        await client.send_chat_message(msg.chatId, msg.circleId, "User is not banned.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 15.  KYODO CLIENT + GAME PLUGIN SETUP
+# 15.  MESSAGE ROUTER
 # ══════════════════════════════════════════════════════════════════════════════
-client = Client(deviceId=Config.DEVICE_ID)
-
-_economy = {
-    "has_account":       has_account,
-    "add_sorex":         add_sorex,
-    "update_game_stats": update_game_stats,
-    "get_rank":          get_rank,
-    "get_reward":        get_reward,
-    "get_account_wins":  lambda uid: accounts.get(uid, {}).get("wins", 0),
+COMMAND_MAP = {
+    "help":       cmd_help,
+    "signup":     cmd_signup,
+    "profile":    cmd_profile,
+    "view":       cmd_view,
+    "shop":       cmd_shop,
+    "buy":        cmd_buy,
+    "use":        cmd_use,
+    "balance":    cmd_balance,
+    "set":        None,
+    "remove":     None,
+    "give":       cmd_give,
+    "ban":        cmd_ban,
+    "unban":      cmd_unban,
 }
 
-game_instances = [G(client, Config, _economy) for G in GAME_CLASSES]
 
+async def _route_command(msg, body: str):
+    """Parse and dispatch a command message."""
+    body = body.strip()
+    if not body.startswith("/"):
+        return False
+    tokens = body[1:].split(None, 1)
+    cmd = tokens[0].lower() if tokens else ""
+    args = tokens[1] if len(tokens) > 1 else ""
 
-def _active_game():
-    return next((g for g in game_instances if g.is_active), None)
+    # Sub-commands for /set and /remove
+    if cmd == "set":
+        sub_tokens = args.split(None, 1)
+        sub = sub_tokens[0].lower() if sub_tokens else ""
+        sub_args = sub_tokens[1] if len(sub_tokens) > 1 else ""
+        if sub == "bio":
+            await cmd_set_bio(msg, sub_args)
+        elif sub == "name":
+            await cmd_set_name(msg, sub_args)
+        else:
+            await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /set bio <text>  or  /set name <name>")
+        return True
 
+    if cmd == "remove":
+        sub = args.strip().lower()
+        if sub == "bio":
+            await cmd_remove_bio(msg, "")
+        else:
+            await client.send_chat_message(msg.chatId, msg.circleId, "Usage: /remove bio")
+        return True
 
-def _triggered_game(content):
-    return next((g for g in game_instances if g.is_trigger(content)), None)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 16.  EVENT HANDLERS
-# ══════════════════════════════════════════════════════════════════════════════
-@client.event(EventType.ChatMemberJoin)
-async def on_join(message: ChatMessage):
+    handler = COMMAND_MAP.get(cmd)
+    if handler is None:
+        return False
     try:
-        nickname = normalize_display_name(message.author.nickname)
-        avatar_url = getattr(message.author, "avatar_url", None) or ""
-        sent = False
-
-        if avatar_url:
-            raw = await _dl(avatar_url)
-            if raw:
-                try:
-                    profile_img = Image.open(BytesIO(raw)).convert("RGBA")
-                    card = await create_welcome_image(profile_img, nickname)
-                    if card:
-                        sent = await _send_welcome_bytes(message.chatId, message.circleId, card)
-                        if sent:
-                            logger.info(f"[welcome] sent welcome card for {nickname}")
-                except Exception as e:
-                    logger.warning(f"[welcome] image creation failed: {e}")
-
-        if not sent:
-            await client.send_message(
-                message.chatId,
-                f"🌫️ Welcome To Silent Hill, {nickname}!",
-                message.circleId,
-            )
-            logger.info(f"[welcome] sent text fallback for {nickname}")
+        await handler(msg, args)
     except Exception as e:
-        logger.exception(f"[on_join] {e}")
+        logger.exception(f"[cmd] /{cmd} failed: {e}")
+        await client.send_chat_message(msg.chatId, msg.circleId, "Something went wrong. Please try again.")
+    return True
 
 
-@client.middleware(EventType.ChatMessage)
-async def _self_filter(message: ChatMessage):
-    if message.author.userId == client.userId:
+# ══════════════════════════════════════════════════════════════════════════════
+# 16.  GAME ROUTER
+# ══════════════════════════════════════════════════════════════════════════════
+_active_games: dict[str, Any] = {}
+
+GAME_TRIGGERS = {
+    "4 in a row":   "gameicon1",
+    "bara alsalfa":  "gameicon2",
+    "chess":        "gameicon3",
+}
+
+
+def _game_key(chat_id, uid1, uid2):
+    players = sorted([uid1, uid2])
+    return f"{chat_id}:{players[0]}:{players[1]}"
+
+
+async def _route_game(msg, body: str):
+    """Check if the message triggers a game challenge."""
+    body_lower = body.lower().strip()
+    game_name = None
+    for trigger in GAME_TRIGGERS:
+        if trigger in body_lower:
+            game_name = trigger
+            break
+    if not game_name:
         return False
 
+    uid = msg.createdBy
+    if not has_account(uid):
+        await client.send_chat_message(msg.chatId, msg.circleId, "You need to /signup before playing games.")
+        return True
 
-@client.event(EventType.ChatMessage)
-async def on_message(message: ChatMessage):
+    if not hasattr(msg, 'replyTo') or not msg.replyTo:
+        return True
+
+    target_id = msg.replyTo.createdBy if hasattr(msg.replyTo, 'createdBy') else str(msg.replyTo)
+    if target_id == uid:
+        await client.send_chat_message(msg.chatId, msg.circleId, "You can't challenge yourself!")
+        return True
+    if not has_account(target_id):
+        await client.send_chat_message(msg.chatId, msg.circleId, "Your opponent needs to /signup first.")
+        return True
+
+    key = _game_key(msg.chatId, uid, target_id)
+    if key in _active_games:
+        await client.send_chat_message(msg.chatId, msg.circleId, "A game between you two is already in progress!")
+        return True
+
+    GameClass = GAME_CLASSES.get(game_name)
+    if not GameClass:
+        await client.send_chat_message(msg.chatId, msg.circleId, f"'{game_name}' is not available yet.")
+        return True
+
+    game = GameClass(client, msg.chatId, msg.circleId, uid, target_id)
+    _active_games[key] = game
+
     try:
-        # ── Layer 1: Message dedup ────────────────────────────────────────
-        if await _dedup_message(message):
-            return
+        winner = await game.run()
+        if winner:
+            reward = get_reward(game_name)
+            add_sorex(winner, reward)
+            winner_name = accounts.get(winner, {}).get("name", "Unknown")
+            await client.send_chat_message(msg.chatId, msg.circleId, f"{winner_name} wins! +{reward} sorex")
+    except Exception as e:
+        logger.exception(f"[game] {game_name} error: {e}")
+    finally:
+        _active_games.pop(key, None)
 
-        content = (message.content or "").strip()
-        uid = message.author.userId
-        nickname = message.author.nickname
-        av = getattr(message.author, "avatar_url", None) or ""
-        chat_id = message.chatId
-        circle_id = message.circleId
+    return True
 
-        if not content or chat_id != Config.CHAT_ID:
-            return
 
-        # Silently sync avatar
-        if av and uid in accounts and accounts[uid].get("avatar_url") != av:
-            accounts[uid]["avatar_url"] = av
-
-        if is_banned(uid):
-            return
-
-        cl = content.lower()
-
-        # ── SIGNUP ─────────────────────────────────────────────────────────
-        if uid in signup_states:
-            if await handle_signup_step(message, content):
-                return
-
-        # ── Layer 2: Command cooldown (ONE check, guards all commands) ────
-        cmd_key = cl.split()[0] if cl.startswith("/") else cl
-        on_cooldown = await _dedup_command(uid, cmd_key)
-
-        # ── USER COMMANDS ──────────────────────────────────────────────────
-        if cl == "/signup":
-            await handle_signup(message)
-            return
-
-        if cl in ("/profile", "/card"):
-            if on_cooldown:
-                return
-            await cmd_profile(message)
-            return
-
-        if cl.startswith("/view "):
-            if on_cooldown:
-                return
-            await cmd_view(message, content[6:].strip())
-            return
-
-        if cl.startswith("/buy "):
-            if on_cooldown:
-                return
-            await cmd_buy(message, content[5:].strip())
-            return
-
-        if cl.startswith("/use "):
-            if on_cooldown:
-                return
-            await cmd_use(message, content[5:].strip())
-            return
-
-        if cl == "/remove bio":
-            if on_cooldown:
-                return
-            await cmd_remove_bio(message)
-            return
-
-        if cl.startswith("/set bio "):
-            if on_cooldown:
-                return
-            await cmd_set_bio(message, content[9:].strip())
-            return
-
-        if cl.startswith("/set name "):
-            if on_cooldown:
-                return
-            await cmd_set_name(message, content[10:].strip())
-            return
-
-        if cl in ("/balance", "/sorex", "/coins"):
-            if on_cooldown:
-                return
-            await cmd_balance(message)
-            return
-
-        if cl in ("/shop", "/store", "/assets"):
-            if on_cooldown:
-                return
-            await cmd_shop(message)
-            return
-
-        if cl in ("/help", "/commands"):
-            if on_cooldown:
-                return
-            await cmd_help(message)
-            return
-
-        # ── OWNER COMMANDS ─────────────────────────────────────────────────
-        if uid == Config.SOR_ID:
-            if cl.startswith("/give "):
-                if on_cooldown:
-                    return
-                await cmd_give(message, content[6:].strip())
-                return
-            if cl == "/ban":
-                if on_cooldown:
-                    return
-                await cmd_ban(message)
-                return
-            if cl == "/unban":
-                if on_cooldown:
-                    return
-                await cmd_unban(message)
-                return
-
-        # ══ GAME ROUTING ════════════════════════════════════════════════════
-        active = _active_game()
-
-        if content in ("انهاء اللعبة",) or cl == "end game":
-            if active:
-                await active.force_end(uid, nickname, chat_id, circle_id)
-            return
-
-        if active:
-            if await active.handle_message(uid, nickname, content, chat_id, circle_id):
-                return
-
-        triggered = _triggered_game(content)
-        if triggered:
-            if active:
-                await client.send_message(
-                    chat_id,
-                    "⚠️ هناك لعبة شغالة بالفعل.\nالمضيف يكتب *انهاء اللعبة* أولاً.",
-                    circle_id,
-                    reply_message_id=message.messageId,
-                )
-                return
-
-            if not getattr(triggered, 'NEEDS_REPLY', True):
-                await triggered.start_challenge(uid, nickname, None, None, chat_id, circle_id)
-                return
-
-            ro = (getattr(message, "replyMessage", None)
-                  or getattr(message, "replyTo", None)
-                  or getattr(message, "reply", None))
-            if not ro:
-                return
-
-            auth = getattr(ro, "author", None)
-            opp_id = getattr(auth, "userId", None) if auth else None
-            opp_nick = getattr(auth, "nickname", None) if auth else None
-            if not opp_id:
-                opp_id = getattr(ro, "userId", None) or getattr(ro, "uid", None)
-                opp_nick = getattr(ro, "nickname", None)
-
-            if not opp_id or opp_id == uid:
-                return
-
-            await triggered.start_challenge(uid, nickname, opp_id, opp_nick, chat_id, circle_id)
-
-    except Exception:
-        logger.exception("[on_message] unhandled")
+async def _check_game_cancel(msg, body: str):
+    """Check if the message is a game cancellation request."""
+    body_lower = body.lower().strip()
+    if body_lower not in ("انهاء اللعبة", "end game"):
+        return False
+    uid = msg.createdBy
+    for key, game in list(_active_games.items()):
+        if hasattr(game, 'host_id') and game.host_id == uid:
+            if hasattr(game, 'cancel'):
+                game.cancel()
+            del _active_games[key]
+            await client.send_chat_message(msg.chatId, msg.circleId, "Game cancelled by host.")
+            return True
+        if hasattr(game, 'player1') and hasattr(game, 'player2'):
+            if uid in (game.player1, game.player2):
+                if hasattr(game, 'cancel'):
+                    game.cancel()
+                del _active_games[key]
+                await client.send_chat_message(msg.chatId, msg.circleId, "Game cancelled.")
+                return True
+    await client.send_chat_message(msg.chatId, msg.circleId, "You don't have an active game to cancel.")
+    return True
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 17.  MAIN
+# 17.  MAIN EVENT HANDLER
 # ══════════════════════════════════════════════════════════════════════════════
-_stop = False
+client: Client | None = None
 
 
-def _shutdown(sig, frame):
-    global _stop
-    logger.info(f"Signal {sig}")
-    _stop = True
+async def on_message(msg: ChatMessage):
+    if not hasattr(msg, 'body') or not msg.body:
+        return
+    if not msg.chatId or not msg.circleId:
+        return
+
+    body = msg.body.strip()
+    if not body:
+        return
+
+    # Deduplicate
+    if await _dedup_message(msg):
+        return
+
+    # Update avatar URL if available
+    uid = msg.createdBy
+    if has_account(uid) and hasattr(msg, 'sender') and msg.sender:
+        avatar_url = getattr(msg.sender, 'icon', '') or ''
+        if avatar_url and accounts[uid].get("avatar_url") != avatar_url:
+            accounts[uid]["avatar_url"] = avatar_url
+            save_accounts_sync()
+
+    # Route commands
+    if body.startswith("/"):
+        if await _dedup_command(uid, body.split()[0]):
+            return
+        await _route_command(msg, body)
+        return
+
+    # Route game triggers
+    if await _route_game(msg, body):
+        return
+
+    # Check game cancellation
+    if await _check_game_cancel(msg, body):
+        return
 
 
-signal.signal(signal.SIGTERM, _shutdown)
-signal.signal(signal.SIGINT, _shutdown)
-
-
-async def _cleanup_client():
-    for attr in ('disconnect', 'close', 'stop'):
-        try:
-            fn = getattr(client, attr, None)
-            if fn and callable(fn):
-                await fn()
-        except Exception:
-            pass
-    await asyncio.sleep(1)
-
-
-def _jittered_backoff(base, attempt):
-    delay = min(base * (2 ** attempt), Config.RESTART_BACKOFF_MAX)
-    jitter = delay * 0.3 * (2 * __import__('random').random() - 1)
-    return max(Config.RESTART_BACKOFF_MIN, delay + jitter)
-
-
+# ══════════════════════════════════════════════════════════════════════════════
+# 18.  MAIN ENTRYPOINT
+# ══════════════════════════════════════════════════════════════════════════════
 async def main():
-    global _stop
+    global client
+
+    keep_alive()
+
+    client = Client()
+    await client.login(Config.EMAIL, Config.PASSWORD, Config.DEVICE_ID)
+    client.on(EventType.CHAT_MESSAGE, on_message)
+
     await load_all()
 
-    backoff = Config.RESTART_BACKOFF_MIN
+    logger.info("Sorex Profile Bot started!")
+
     try:
-        while not _stop:
-            start = time.time()
-            try:
-                logger.info("Logging in…")
-                await client.login(Config.EMAIL, Config.PASSWORD)
-                logger.success("✅ Logged in — Profile Bot is alive!")
-                await client.socket_wait()
-                logger.warning("[main] session ended")
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except Exception as e:
-                logger.exception(f"[main] {e}")
-            if _stop:
-                break
-            await _cleanup_client()
-            session_duration = time.time() - start
-            if session_duration > 300:
-                backoff = Config.RESTART_BACKOFF_MIN
-            else:
-                backoff = _jittered_backoff(Config.RESTART_BACKOFF_MIN, 0 if backoff <= Config.RESTART_BACKOFF_MIN else 1)
-            logger.info(f"[main] restart in {backoff:.1f}s…")
-            slept = 0.0
-            while slept < backoff and not _stop:
-                await asyncio.sleep(1.0)
-                slept += 1.0
+        await client.connect()
+    except Exception as e:
+        logger.exception(f"[main] connection error: {e}")
     finally:
-        _save_dedup()
         await close_http()
-        await close_github()
+        close_github()
 
 
 if __name__ == "__main__":
-    while True:
-        keep_alive()
-        try:
-            asyncio.run(main())
-        except (KeyboardInterrupt, SystemExit):
-            break
-        except Exception as e:
-            logger.error(f"[top] {e}")
-            time.sleep(5)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user.")
