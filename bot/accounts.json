@@ -3,7 +3,7 @@
     "name": "Sor",
     "bio": "Seek me under the stars",
     "bio_removed": false,
-    "games_played": 10,
+    "games_played": 11,
     "wins": 6,
     "wealth": 9651,
     "owned_assets": [
@@ -34,7 +34,7 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 8,
+        "plays": 9,
         "wins": 5
       },
       "bara alsalfa": {
@@ -280,9 +280,9 @@
     "nickname": "sobin★.",
     "bio": "risk",
     "bio_removed": false,
-    "games_played": 0,
-    "wins": 0,
-    "wealth": 5,
+    "games_played": 1,
+    "wins": 1,
+    "wealth": 10,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -293,7 +293,12 @@
     "active_frame": "framedefault",
     "active_bubble": "bubbledefault",
     "active_colour": "black",
-    "game_stats": {},
+    "game_stats": {
+      "4 in a row": {
+        "plays": 1,
+        "wins": 1
+      }
+    },
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmo4rknl417tw0jb32wlae12c/0x0/media.jpg?wh=undefinedxundefined"
   }
 }
