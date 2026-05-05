@@ -5,7 +5,7 @@
     "bio_removed": false,
     "games_played": 8,
     "wins": 5,
-    "wealth": 9796,
+    "wealth": 9771,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -21,7 +21,8 @@
       "bg6",
       "bg5",
       "bg7",
-      "bg9"
+      "bg9",
+      "frame4"
     ],
     "active_bg": "bg9",
     "active_frame": "frame1",
@@ -161,7 +162,7 @@
         "wins": 0
       }
     },
-    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmonkhx1a073n0iaz42rg5ajd/0x0/media.jpg?wh=undefinedxundefined"
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmorst1pi0rqu0ie86tlrc2vu/0x0/media.jpg?wh=undefinedxundefined"
   },
   "cmo68msef0mbw0ibfehk69elr": {
     "name": "شهب",
