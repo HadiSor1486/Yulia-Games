@@ -18,15 +18,14 @@
 #  │  4. Restart — done.                                                     │
 #  └───────────────────────────────────────────────────────────────────────┘
 #
-#  ┌─ HOW TO ADD A NEW FRAME WITH CUSTOM SIZE/POSITION ────────────────────┐
-#  │  1. Drop frame image in frames/  (e.g. frames/frame4.png)             │
+#  ┌─ HOW TO ADD A NEW FRAME OR BUBBLE WITH CUSTOM SIZE/POSITION ──────────┐
+#  │  1. Drop image in frames/ or bubbles/                                 │
 #  │  2. Add it to ASSETS:     "frame4": "frames/frame4.png"               │
-#  │  3. Add its custom layout to FRAME_LAYOUTS:                           │
+#  │  3. Add its custom layout to FRAME_LAYOUTS or BUBBLE_LAYOUTS:          │
 #  │        "frame4": {"x": 350, "y": 220, "size": 330}                    │
 #  │     x, y  = top-left position on the card                             │
 #  │     size  = width in pixels (height is auto-scaled to keep ratio)     │
-#  │  4. If you DON'T add a FRAME_LAYOUTS entry, the frame uses the        │
-#  │     default layout (same as framedefault / frame1 / frame2).          │
+#  │  4. If you DON'T add a layout entry, it uses the default.               │
 #  │  5. Optionally add a price in ASSET_PRICES.                           │
 #  │  6. Restart — done.                                                     │
 #  └───────────────────────────────────────────────────────────────────────┘
@@ -113,6 +112,20 @@ FRAME_LAYOUTS = {
 }
 
 
+# ─── Per-bubble layout overrides ────────────────────────────────────────────
+# If a bubble key exists here, its custom (x, y, size) is used instead of the
+# default layout.  Bubbles NOT listed here automatically use the default.
+#   x, y   = top-left corner position on the profile card
+#   size   = width in pixels (height auto-scales to preserve image ratio)
+#
+# Bubbles without a BUBBLE_LAYOUTS entry use the default layout
+# (same as bubbledefault / bubble1 / bubble2).
+BUBBLE_LAYOUTS = {
+    # EXAMPLE — add bubble3 with its own custom position & size:
+    # "bubble3": {"x": 160, "y": 600, "size": 700},
+}
+
+
 # ─── Asset prices in sorex ──────────────────────────────────────────────────
 # • Keys containing "default" are automatically FREE (price = 0).
 # • Any asset NOT listed here costs DEFAULT_ASSET_PRICE (20 sorex).
@@ -165,8 +178,8 @@ COLOR_MAP = {
 # ─── Game rewards (sorex given to the winner) ────────────────────────────────
 # Any game NOT listed here rewards DEFAULT_GAME_REWARD (40 sorex).
 GAME_REWARDS = {
-    "4 in a row":   5,
-    "bara alsalfa":  7,
+    "4 in a row":   10,
+    "bara alsalfa":  20,
     "chess":        10,
 }
 
@@ -201,3 +214,4 @@ def get_reward(game_name: str) -> int:
         if name.lower() == lower:
             return reward
     return DEFAULT_GAME_REWARD
+
