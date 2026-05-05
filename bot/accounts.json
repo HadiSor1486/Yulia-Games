@@ -5,7 +5,7 @@
     "bio_removed": false,
     "games_played": 8,
     "wins": 5,
-    "wealth": 9746,
+    "wealth": 9711,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -23,7 +23,8 @@
       "bg7",
       "bg9",
       "frame4",
-      "frame3"
+      "frame3",
+      "bg10"
     ],
     "active_bg": "bg1",
     "active_frame": "frame4",
@@ -39,7 +40,7 @@
         "wins": 1
       }
     },
-    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmoctufyx1bha0ig6e0oqcjjv/0x0/media.jpg?wh=undefinedxundefined"
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmosr4i760dw80ibth2sigon5/0x0/media.jpg?wh=undefinedxundefined"
   },
   "cmnfvboez001h0iec4yr83mdl": {
     "name": "Pnl",
