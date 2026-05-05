@@ -75,6 +75,7 @@ ASSETS = {
     "frame2":        "frames/frame2.png",
     "frame3":        "frames/frame3.png",
     "frame4":        "frames/frame4.png",
+    "frame5":        "frames/frame5.png",
 
     # ── Chat Bubbles ────────────────────────────────────────────────────────
     "bubbledefault":  "bubbles/default-bubble.png",  # FREE
@@ -108,6 +109,7 @@ FRAME_LAYOUTS = {
     # EXAMPLE — add frame4 with its own custom position & size:
  "frame3": {"x": 305, "y": 175, "size": 410},
  "frame4": {"x": 305, "y": 175, "size": 410},
+ "frame5": {"x": 284, "y": 179, "size": 455},
 }
 
 
@@ -133,7 +135,8 @@ ASSET_PRICES = {
     "frame1": 20,
     "frame2": 20,
     "frame3": 25,
-    "frame4": 25,   # ← EXAMPLE: add price when you add frame4
+    "frame4": 25,
+    "frame5": 30,# ← EXAMPLE: add price when you add frame4
 
     # Bubbles  ─────────────────────────────────────────────────────────────
     "bubble1": 30,
