@@ -145,7 +145,7 @@
     "bio_removed": false,
     "games_played": 1,
     "wins": 0,
-    "wealth": 0,
+    "wealth": 100,
     "owned_assets": [
       "bgdefault",
       "framedefault",
