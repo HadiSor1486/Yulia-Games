@@ -18,6 +18,19 @@
 #  │  4. Restart — done.                                                     │
 #  └───────────────────────────────────────────────────────────────────────┘
 #
+#  ┌─ HOW TO ADD A NEW FRAME WITH CUSTOM SIZE/POSITION ────────────────────┐
+#  │  1. Drop frame image in frames/  (e.g. frames/frame4.png)             │
+#  │  2. Add it to ASSETS:     "frame4": "frames/frame4.png"               │
+#  │  3. Add its custom layout to FRAME_LAYOUTS:                           │
+#  │        "frame4": {"x": 350, "y": 220, "size": 330}                    │
+#  │     x, y  = top-left position on the card                             │
+#  │     size  = width in pixels (height is auto-scaled to keep ratio)     │
+#  │  4. If you DON'T add a FRAME_LAYOUTS entry, the frame uses the        │
+#  │     default layout (same as framedefault / frame1 / frame2).          │
+#  │  5. Optionally add a price in ASSET_PRICES.                           │
+#  │  6. Restart — done.                                                     │
+#  └───────────────────────────────────────────────────────────────────────┘
+#
 #  ┌─ HOW TO ADD A NEW GAME ───────────────────────────────────────────────┐
 #  │  1. Add its icon file + entry in ASSETS  (e.g. "gameicon4": "icons/g4.png") │
 #  │  2. Add its sorex reward in GAME_REWARDS (omit = DEFAULT_GAME_REWARD) │
@@ -29,7 +42,7 @@
 #  │  Colours are "virtual" assets — no image file is needed.                │
 #  │  They are purchased with  /buy colour <name>                            │
 #  │  and equipped with        /use colour <name>                            │
-#  │  "black" is the default colour and is FREE for everyone.                │
+#  │  "black" is the built-in default colour and is FREE for everyone.       │
 #  └───────────────────────────────────────────────────────────────────────┘
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -59,6 +72,7 @@ ASSETS = {
     "framedefault":  "frames/default-frame.png",   # FREE
     "frame1":        "frames/frame1.png",
     "frame2":        "frames/frame2.png",
+    # "frame4":        "frames/frame4.png",   # ← EXAMPLE: uncomment & adjust
 
     # ── Chat Bubbles ────────────────────────────────────────────────────────
     "bubbledefault":  "bubbles/default-bubble.png",  # FREE
@@ -77,6 +91,20 @@ ASSETS = {
     "pink":    None,
     "purple":  None,
     "gray":    None,
+}
+
+
+# ─── Per-frame layout overrides ─────────────────────────────────────────────
+# If a frame key exists here, its custom (x, y, size) is used instead of the
+# default layout.  Frames NOT listed here automatically use the default.
+#   x, y   = top-left corner position on the profile card
+#   size   = width in pixels (height auto-scales to preserve image ratio)
+#
+# The 3 existing frames (framedefault, frame1, frame2) use the default layout
+# and do NOT need entries here.
+FRAME_LAYOUTS = {
+    # EXAMPLE — add frame4 with its own custom position & size:
+    # "frame4": {"x": 350, "y": 220, "size": 330},
 }
 
 
@@ -100,6 +128,7 @@ ASSET_PRICES = {
     # Frames  ──────────────────────────────────────────────────────────────
     "frame1": 20,
     "frame2": 20,
+    # "frame4": 25,   # ← EXAMPLE: add price when you add frame4
 
     # Bubbles  ─────────────────────────────────────────────────────────────
     "bubble1": 30,
