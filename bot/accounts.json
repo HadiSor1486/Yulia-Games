@@ -25,7 +25,7 @@
       "frame4",
       "frame3"
     ],
-    "active_bg": "bg1",
+    "active_bg": "bgdefault",
     "active_frame": "frame3",
     "active_bubble": "bubble1",
     "active_colour": "black",
