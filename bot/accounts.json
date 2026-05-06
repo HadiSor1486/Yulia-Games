@@ -3,7 +3,7 @@
     "name": "Sor",
     "bio": "Seek me under the stars",
     "bio_removed": false,
-    "games_played": 13,
+    "games_played": 14,
     "wins": 6,
     "wealth": 9651,
     "owned_assets": [
@@ -34,7 +34,7 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 11,
+        "plays": 12,
         "wins": 5
       },
       "bara alsalfa": {
@@ -332,9 +332,9 @@
     "nickname": "୧ 𖥔  hiso ⋄ 🎀",
     "bio": "ملكة الالعاب",
     "bio_removed": false,
-    "games_played": 0,
-    "wins": 0,
-    "wealth": 0,
+    "games_played": 1,
+    "wins": 1,
+    "wealth": 10,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -344,7 +344,12 @@
     "active_frame": "framedefault",
     "active_bubble": "bubbledefault",
     "active_colour": "black",
-    "game_stats": {},
+    "game_stats": {
+      "4 in a row": {
+        "plays": 1,
+        "wins": 1
+      }
+    },
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmogvfag01o6s0ieeg5s87v3i/0x0/media.png?wh=undefinedxundefined"
   }
 }
