@@ -3,7 +3,7 @@
     "name": "Sor",
     "bio": "Seek me under the stars",
     "bio_removed": false,
-    "games_played": 12,
+    "games_played": 13,
     "wins": 6,
     "wealth": 9651,
     "owned_assets": [
@@ -34,7 +34,7 @@
     "active_colour": "black",
     "game_stats": {
       "4 in a row": {
-        "plays": 10,
+        "plays": 11,
         "wins": 5
       },
       "bara alsalfa": {
@@ -48,9 +48,9 @@
     "name": "Pnl",
     "bio": "Free Palestine",
     "bio_removed": false,
-    "games_played": 3,
-    "wins": 2,
-    "wealth": 270,
+    "games_played": 4,
+    "wins": 3,
+    "wealth": 280,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -69,8 +69,8 @@
     "active_colour": "white",
     "game_stats": {
       "4 in a row": {
-        "plays": 3,
-        "wins": 2
+        "plays": 4,
+        "wins": 3
       }
     },
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmomtrcgoi6os0iek55ek4khl/0x0/media.jpg?wh=undefinedxundefined"
