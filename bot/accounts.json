@@ -370,7 +370,7 @@
       "frame3"
     ],
     "active_bg": "bgdefault",
-    "active_frame": "framedefault",
+    "active_frame": "frame3",
     "active_bubble": "bubbledefault",
     "active_colour": "black",
     "game_stats": {},
