@@ -50,7 +50,7 @@
     "bio_removed": false,
     "games_played": 5,
     "wins": 4,
-    "wealth": 1290,
+    "wealth": 1255,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -61,7 +61,8 @@
       "bg4",
       "bg2",
       "bubble3",
-      "white"
+      "white",
+      "bg7"
     ],
     "active_bg": "bg2",
     "active_frame": "frame2",
@@ -100,7 +101,7 @@
         "wins": 1
       }
     },
-    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmompcgkqj48h0ieg6dft2idi/0x0/media.jpg?wh=undefinedxundefined"
+    "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmot82svn53qf0hcl6mfjhrxv/0x0/media.jpg?wh=undefinedxundefined"
   },
   "cmo6y9mrc2pom0ibvem6w8ryw": {
     "name": "iiussef",
