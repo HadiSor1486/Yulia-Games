@@ -370,7 +370,7 @@
       "frame3",
       "bg10"
     ],
-    "active_bg": "bgdefault",
+    "active_bg": "bg10",
     "active_frame": "frame3",
     "active_bubble": "bubbledefault",
     "active_colour": "black",
