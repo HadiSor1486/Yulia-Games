@@ -48,9 +48,9 @@
     "name": "Pnl",
     "bio": "Free Palestine",
     "bio_removed": false,
-    "games_played": 4,
-    "wins": 3,
-    "wealth": 280,
+    "games_played": 5,
+    "wins": 4,
+    "wealth": 290,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -69,8 +69,8 @@
     "active_colour": "white",
     "game_stats": {
       "4 in a row": {
-        "plays": 4,
-        "wins": 3
+        "plays": 5,
+        "wins": 4
       }
     },
     "avatar_url": "https://ams3-cdn.kyodo.app/user/avatar/cmomtrcgoi6os0iek55ek4khl/0x0/media.jpg?wh=undefinedxundefined"
