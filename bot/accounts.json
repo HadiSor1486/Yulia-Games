@@ -334,11 +334,12 @@
     "bio_removed": false,
     "games_played": 1,
     "wins": 1,
-    "wealth": 50,
+    "wealth": 15,
     "owned_assets": [
       "bgdefault",
       "framedefault",
-      "bubbledefault"
+      "bubbledefault",
+      "bg10"
     ],
     "active_bg": "bgdefault",
     "active_frame": "framedefault",
