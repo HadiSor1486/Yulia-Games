@@ -50,7 +50,7 @@
     "bio_removed": false,
     "games_played": 5,
     "wins": 4,
-    "wealth": 230,
+    "wealth": 195,
     "owned_assets": [
       "bgdefault",
       "framedefault",
@@ -64,7 +64,8 @@
       "white",
       "bg7",
       "frame3",
-      "bg1"
+      "bg1",
+      "bg10"
     ],
     "active_bg": "bg1",
     "active_frame": "frame3",
